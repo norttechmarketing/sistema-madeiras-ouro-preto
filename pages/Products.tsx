@@ -18,12 +18,7 @@ const Products: React.FC = () => {
   const [formData, setFormData] = useState<Partial<Product>>({
     name: '',
     code: '',
-    category: '',
-    price: 0,
-    price_bruto: 0,
-    price_benef: 0,
-    unit: 'un',
-    cost: 0
+    unit: 'un'
   });
 
   const fetchProducts = async () => {
@@ -50,8 +45,7 @@ const Products: React.FC = () => {
         ...formData,
         price: Number(formData.price),
         price_bruto: Number(formData.price_bruto),
-        price_benef: Number(formData.price_benef),
-        cost: Number(formData.cost || 0)
+        price_benef: Number(formData.price_benef)
       };
 
       if (editingProduct) {
@@ -95,7 +89,7 @@ const Products: React.FC = () => {
       setFormData(product);
     } else {
       setEditingProduct(null);
-      setFormData({ name: '', code: '', category: '', price: 0, price_bruto: 0, price_benef: 0, unit: 'un', cost: 0 });
+      setFormData({ name: '', code: '', category: '', price: 0, price_bruto: 0, price_benef: 0, unit: 'un' });
     }
     setIsModalOpen(true);
   };
@@ -228,15 +222,28 @@ const Products: React.FC = () => {
                 </div>
                 <div className="space-y-1.5">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Categoria</label>
-                  <input
-                    type="text" list="categories"
-                    className="w-full p-3 border border-[#d9d7d8] rounded-xl text-sm font-semibold focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] outline-none transition-all"
+                  <select
+                    required
+                    className="w-full p-3 border border-[#d9d7d8] rounded-xl text-sm font-semibold focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] outline-none transition-all appearance-none bg-white"
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  />
-                  <datalist id="categories">
-                    <option value="Madeira Bruta" /><option value="Madeira Nobre" /><option value="Chapas" /><option value="Serviços" />
-                  </datalist>
+                  >
+                    <option value="" disabled>Selecionar...</option>
+                    {[
+                      'Peroba', 'Itaúba', 'Cambará', 'Cumaru', 'Angelim',
+                      'Garapeira', 'Cedrinho', 'Pinus', 'Eucalipto',
+                      'Pinus Tratado', 'Outras'
+                    ].map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                    {formData.category && ![
+                      'Peroba', 'Itaúba', 'Cambará', 'Cumaru', 'Angelim',
+                      'Garapeira', 'Cedrinho', 'Pinus', 'Eucalipto',
+                      'Pinus Tratado', 'Outras'
+                    ].includes(formData.category) && (
+                        <option value={formData.category}>{formData.category}</option>
+                      )}
+                  </select>
                 </div>
               </div>
 
@@ -271,7 +278,7 @@ const Products: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 gap-6">
                 <div className="space-y-1.5">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Unidade</label>
                   <select
@@ -288,15 +295,6 @@ const Products: React.FC = () => {
                     <option value="Kg">quilograma (Kg)</option>
                     <option value="JG">jogo (JG)</option>
                   </select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Custo (Opcional)</label>
-                  <input
-                    type="number" step="0.01" min="0"
-                    className="w-full p-3 border border-[#d9d7d8] rounded-xl text-sm font-semibold focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] outline-none transition-all"
-                    value={formData.cost}
-                    onChange={(e) => setFormData({ ...formData, cost: parseFloat(e.target.value) })}
-                  />
                 </div>
               </div>
 
