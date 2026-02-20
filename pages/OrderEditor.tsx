@@ -12,6 +12,11 @@ import {
 import Card from '../components/ui/Card';
 import PrimaryButton from '../components/ui/PrimaryButton';
 
+function ceilToHalf(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.ceil(value * 2) / 2;
+}
+
 const OrderEditor: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -114,11 +119,15 @@ const OrderEditor: React.FC = () => {
     const larg = item.largura || 0;
     const unit = item.unit;
 
+    // Arredondar para cálculo (múltiplos de 0,50)
+    const compCalc = ceilToHalf(comp);
+    const largCalc = ceilToHalf(larg / 100);
+
     if (unit === 'ML') {
-      return qty * comp * unitPrice;
+      return qty * compCalc * unitPrice;
     } else if (unit === 'm2') {
       if (larg > 0) {
-        return qty * comp * (larg / 100) * unitPrice;
+        return qty * compCalc * largCalc * unitPrice;
       }
       return qty * unitPrice;
     } else {
