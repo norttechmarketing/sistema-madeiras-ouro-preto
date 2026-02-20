@@ -20,7 +20,7 @@ export interface Product {
   price: number; // For backward compatibility / default
   price_bruto: number;
   price_benef: number;
-  cost: number;
+  cost?: number;
   unit: ProductUnit;
 }
 
