@@ -19,9 +19,13 @@ function ceilToHalf(value: number): number {
 
 function normalizeWidthForArea(unit: string | undefined, width: number): number {
   if (!Number.isFinite(width)) return 0;
-  // Se unit for m2 e largura >= 3, assumir que é cm e fazer /100
+  // Se unit for m2 e largura >= 3, assumir que é cm, arredondar para múltiplo de 5 e fazer /100
   if (unit === 'm2' || unit === 'm²') {
-    return width >= 3 ? width / 100 : width;
+    if (width >= 3) {
+      const roundedCm = Math.ceil(width / 5) * 5;
+      return roundedCm / 100;
+    }
+    return width;
   }
   return width;
 }
