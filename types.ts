@@ -51,7 +51,10 @@ export interface Order {
   type: 'Orçamento' | 'Pedido';
   items: OrderItem[];
   subtotal: number;
-  totalDiscount: number;
+  totalDiscount: number; // Item-level discounts sum
+  globalDiscountType?: 'percent' | 'fixed';
+  globalDiscountValue?: number;
+  globalDiscountAmount?: number;
   total: number;
   internalNotes?: string;
   customerNotes?: string;
