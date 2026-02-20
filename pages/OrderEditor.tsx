@@ -17,6 +17,15 @@ function ceilToHalf(value: number): number {
   return Math.ceil(value * 2) / 2;
 }
 
+function normalizeWidthForArea(unit: string | undefined, width: number): number {
+  if (!Number.isFinite(width)) return 0;
+  // Se unit for m2 e largura >= 3, assumir que é cm e fazer /100
+  if (unit === 'm2' || unit === 'm²') {
+    return width >= 3 ? width / 100 : width;
+  }
+  return width;
+}
+
 const OrderEditor: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -119,15 +128,16 @@ const OrderEditor: React.FC = () => {
     const larg = item.largura || 0;
     const unit = item.unit;
 
-    // Arredondar para cálculo (múltiplos de 0,50)
+    // Arredondar comprimento para cálculo (múltiplos de 0,50)
     const compCalc = ceilToHalf(comp);
-    const largCalc = ceilToHalf(larg / 100);
+    // Normalizar largura: se >= 3 em m², converter cm para m
+    const wCalc = normalizeWidthForArea(unit, larg);
 
     if (unit === 'ML') {
       return qty * compCalc * unitPrice;
     } else if (unit === 'm2') {
       if (larg > 0) {
-        return qty * compCalc * largCalc * unitPrice;
+        return qty * compCalc * wCalc * unitPrice;
       }
       return qty * unitPrice;
     } else {
@@ -531,11 +541,11 @@ Posso te ajudar em mais algo?`;
 
                 {newItem.unit === 'm2' && (
                   <div className="w-[140px] space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Larg.(cm)</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">LARG. (cm)</label>
                     <input
                       type="number"
                       className="w-full h-[48px] p-3 bg-white border border-[#d9d7d8] rounded-xl text-[17px] font-bold outline-none focus:ring-2 focus:ring-[#9b2b29] focus:border-[#9b2b29] focus:bg-white transition-all text-right"
-                      placeholder="0,00"
+                      placeholder="ex: 20 = 20cm"
                       step="0.01"
                       min="0"
                       value={newItem.largura}
