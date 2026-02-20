@@ -15,7 +15,7 @@ export const generateOrderPDF = async (order: Order, openPrint = false, client?:
   const grayColor = '#666666';
 
   const unitLabels: Record<string, string> = {
-    'm2': 'm²', 'm3': 'm³', 'm': 'm', 'un': 'un'
+    'm2': 'm²', 'm3': 'm³', 'm': 'm', 'un': 'un', 'ML': 'ML', 'Pç': 'Pç', 'Kg': 'Kg', 'JG': 'JG'
   };
 
   // Watermark
@@ -149,16 +149,18 @@ export const generateOrderPDF = async (order: Order, openPrint = false, client?:
   const addressLines = splitAddress.length;
   const tableStartY = 86 + (addressLines * 4) + 2;
 
-  const tableColumn = ["Item / Descrição", "Qtd", "Un", "Vl. Unit.", "Desc.", "Total"];
+  const tableColumn = ["Descrição", "Qtd", "Comp.", "Larg.", "Benef.", "Un", "Vl. Unit.", "Total"];
   const tableRows: any[] = [];
 
   order.items.forEach((item: OrderItem) => {
     const itemData = [
       item.description,
       item.quantity.toString(),
+      item.comprimento ? item.comprimento.toString() : '-',
+      item.largura ? item.largura.toString() : '-',
+      item.isBeneficiado ? 'Benef.' : '-',
       unitLabels[item.unit] || item.unit || 'un',
       `R$ ${item.unitPrice.toFixed(2)}`,
-      item.discountType === 'percentage' ? `${item.discountValue}%` : `R$ ${item.discountValue.toFixed(2)}`,
       `R$ ${item.total.toFixed(2)}`
     ];
     tableRows.push(itemData);

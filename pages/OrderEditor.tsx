@@ -47,8 +47,20 @@ const OrderEditor: React.FC = () => {
     description: string;
     quantity: number;
     price: number;
-    unit: ProductUnit;
-  }>({ productId: '', description: '', quantity: 1, price: 0, unit: 'un' });
+    unit: ProductUnit | string;
+    comprimento: number;
+    largura: number;
+    isBeneficiado: boolean;
+  }>({
+    productId: '',
+    description: '',
+    quantity: 1,
+    price: 0,
+    unit: 'un',
+    comprimento: 0,
+    largura: 0,
+    isBeneficiado: false
+  });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -95,9 +107,28 @@ const OrderEditor: React.FC = () => {
     fetchData();
   }, [id]);
 
-  const subtotal = orderItems.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
+  const getItemBaseTotal = (item: Partial<OrderItem>) => {
+    const qty = item.quantity || 0;
+    const unitPrice = item.unitPrice || 0;
+    const comp = item.comprimento || 0;
+    const larg = item.largura || 0;
+    const unit = item.unit;
+
+    if (unit === 'ML') {
+      return qty * comp * unitPrice;
+    } else if (unit === 'm2') {
+      if (larg > 0) {
+        return qty * comp * (larg / 100) * unitPrice;
+      }
+      return qty * unitPrice;
+    } else {
+      return qty * unitPrice;
+    }
+  };
+
+  const subtotal = orderItems.reduce((acc, item) => acc + getItemBaseTotal(item), 0);
   const totalDiscount = orderItems.reduce((acc, item) => {
-    const itemSub = item.unitPrice * item.quantity;
+    const itemSub = getItemBaseTotal(item);
     const discount = item.discountType === 'percentage'
       ? itemSub * (item.discountValue / 100)
       : item.discountValue;
@@ -108,20 +139,41 @@ const OrderEditor: React.FC = () => {
   const addItem = () => {
     if (!newItem.description) return;
 
-    const item: OrderItem = {
-      id: uuid(),
+    if (newItem.unit === 'ML' && !newItem.comprimento) {
+      alert('Comprimento é obrigatório para produtos em ML.');
+      return;
+    }
+
+    const baseItem: Partial<OrderItem> = {
       productId: newItem.productId || undefined,
       description: newItem.description,
       quantity: newItem.quantity,
       unitPrice: newItem.price,
       unit: newItem.unit,
+      comprimento: newItem.comprimento || undefined,
+      largura: newItem.largura || undefined,
+      isBeneficiado: newItem.isBeneficiado,
       discountType: 'fixed',
       discountValue: 0,
-      total: newItem.quantity * newItem.price
     };
 
+    const item: OrderItem = {
+      ...baseItem,
+      id: uuid(),
+      total: getItemBaseTotal(baseItem)
+    } as OrderItem;
+
     setOrderItems([...orderItems, item]);
-    setNewItem({ productId: '', description: '', quantity: 1, price: 0, unit: 'un' });
+    setNewItem({
+      productId: '',
+      description: '',
+      quantity: 1,
+      price: 0,
+      unit: 'un',
+      comprimento: 0,
+      largura: 0,
+      isBeneficiado: false
+    });
     setProductSearch('');
   };
 
@@ -131,7 +183,7 @@ const OrderEditor: React.FC = () => {
       const updated = { ...item, [field]: value };
 
       let discount = 0;
-      const sub = updated.quantity * updated.unitPrice;
+      const sub = getItemBaseTotal(updated);
       if (updated.discountType === 'percentage') {
         discount = sub * (updated.discountValue / 100);
       } else {
@@ -149,10 +201,11 @@ const OrderEditor: React.FC = () => {
 
   const handleProductSelect = (prod: Product) => {
     setNewItem({
+      ...newItem,
       productId: prod.id,
       description: prod.name,
       quantity: 1,
-      price: prod.price,
+      price: newItem.isBeneficiado ? prod.price_benef : prod.price_bruto,
       unit: prod.unit || 'un'
     });
     setProductSearch(prod.name);
@@ -260,7 +313,7 @@ Posso te ajudar em mais algo?`;
   };
 
   const unitLabels: Record<string, string> = {
-    'm2': 'm²', 'm3': 'm³', 'm': 'm', 'un': 'un'
+    'm2': 'm²', 'm3': 'm³', 'm': 'm', 'un': 'un', 'ML': 'ML', 'Pç': 'Pç', 'Kg': 'Kg', 'JG': 'JG'
   };
 
   return (
@@ -407,13 +460,13 @@ Posso te ajudar em mais algo?`;
           <Card className="!p-0 overflow-hidden flex flex-col">
             <div className="p-6 border-b border-slate-100">
               <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-4">Itens do Documento</h3>
-              <div className="bg-slate-50/50 p-4 rounded-2xl grid grid-cols-12 gap-3 items-end border border-slate-100">
-                <div className="col-span-12 md:col-span-6 relative group">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1.5 block">Produto ou Serviço</label>
+              <div className="bg-slate-50/50 p-4 rounded-2xl flex flex-wrap items-end gap-3 border border-slate-100">
+                <div className="flex-1 min-w-[280px] relative group space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Produto</label>
                   <div className="relative">
                     <input
                       type="text"
-                      className="w-full pl-4 pr-10 py-2.5 bg-white border border-[#d9d7d8] rounded-xl text-sm font-bold outline-none focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] transition-all"
+                      className="w-full h-[48px] pl-4 pr-10 py-2.5 bg-white border border-[#d9d7d8] rounded-xl text-[17px] font-bold outline-none focus:ring-2 focus:ring-[#9b2b29] focus:border-[#9b2b29] focus:bg-white transition-all"
                       placeholder="Buscar catálogo..."
                       value={productSearch || newItem.description}
                       onChange={(e) => {
@@ -432,106 +485,216 @@ Posso te ajudar em mais algo?`;
                           onClick={() => handleProductSelect(p)}
                         >
                           <span className="font-bold text-slate-800">{p.name} <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest">({unitLabels[p.unit] || p.unit})</span></span>
-                          <span className="text-slate-900 font-black text-xs">R$ {p.price.toFixed(2)}</span>
+                          <span className="text-slate-900 font-black text-xs">R$ {(newItem.isBeneficiado ? p.price_benef : p.price_bruto).toFixed(2)}</span>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
-                <div className="col-span-4 md:col-span-2 space-y-1.5">
+
+                <div className="w-[140px] space-y-1.5">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Qtd</label>
                   <input
                     type="number"
-                    className="w-full p-2.5 bg-white border border-[#d9d7d8] rounded-xl text-sm font-bold outline-none focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] transition-all"
+                    className="w-full h-[48px] p-3 bg-white border border-[#d9d7d8] rounded-xl text-[17px] font-bold outline-none focus:ring-2 focus:ring-[#9b2b29] focus:border-[#9b2b29] focus:bg-white transition-all text-right"
+                    placeholder="0,00"
                     step={newItem.unit === 'un' ? '1' : '0.01'}
                     min="0.01"
                     value={newItem.quantity}
                     onChange={e => setNewItem({ ...newItem, quantity: parseFloat(e.target.value) })}
                   />
                 </div>
-                <div className="col-span-4 md:col-span-2 space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Preço</label>
-                  <input
-                    type="number"
-                    className="w-full p-2.5 bg-white border border-[#d9d7d8] rounded-xl text-sm font-bold outline-none focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] transition-all"
-                    min="0"
-                    value={newItem.price}
-                    onChange={e => setNewItem({ ...newItem, price: parseFloat(e.target.value) })}
-                  />
+
+                {(newItem.unit === 'ML' || newItem.unit === 'm2') && (
+                  <div className="w-[140px] space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Comp.</label>
+                    <input
+                      type="number"
+                      className="w-full h-[48px] p-3 bg-white border border-[#d9d7d8] rounded-xl text-[17px] font-bold outline-none focus:ring-2 focus:ring-[#9b2b29] focus:border-[#9b2b29] focus:bg-white transition-all text-right"
+                      placeholder="0,00"
+                      step="0.01"
+                      min="0.01"
+                      value={newItem.comprimento}
+                      onChange={e => setNewItem({ ...newItem, comprimento: parseFloat(e.target.value) })}
+                    />
+                  </div>
+                )}
+
+                {newItem.unit === 'm2' && (
+                  <div className="w-[140px] space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Larg.(cm)</label>
+                    <input
+                      type="number"
+                      className="w-full h-[48px] p-3 bg-white border border-[#d9d7d8] rounded-xl text-[17px] font-bold outline-none focus:ring-2 focus:ring-[#9b2b29] focus:border-[#9b2b29] focus:bg-white transition-all text-right"
+                      placeholder="0,00"
+                      step="0.01"
+                      min="0"
+                      value={newItem.largura}
+                      onChange={e => setNewItem({ ...newItem, largura: parseFloat(e.target.value) })}
+                    />
+                  </div>
+                )}
+
+                <div className="w-[90px] space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block text-center">Benef.</label>
+                  <div className="flex justify-center items-center h-[48px] bg-white border border-[#d9d7d8] rounded-xl">
+                    <input
+                      type="checkbox"
+                      className="w-5 h-5 rounded border-gray-300 text-[#9b2b29] focus:ring-[#9b2b29] cursor-pointer"
+                      checked={newItem.isBeneficiado}
+                      onChange={e => {
+                        const isChecked = e.target.checked;
+                        const prod = products.find(p => p.id === newItem.productId);
+                        setNewItem({
+                          ...newItem,
+                          isBeneficiado: isChecked,
+                          price: prod ? (isChecked ? prod.price_benef : prod.price_bruto) : newItem.price
+                        });
+                      }}
+                    />
+                  </div>
                 </div>
-                <div className="col-span-4 md:col-span-2">
+
+                <div className="w-[160px] space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Preço Unit.</label>
+                  <div className="w-full h-[48px] p-3 bg-slate-100 border border-slate-200 rounded-xl text-[17px] font-black text-slate-600 flex items-center justify-end">
+                    R$ {newItem.price.toFixed(2)}
+                  </div>
+                </div>
+
+                <div className="w-[60px]">
                   <PrimaryButton
                     onClick={addItem}
-                    className="w-full p-2.5"
+                    className="w-full h-[48px] flex items-center justify-center"
                   >
-                    <Plus size={18} />
+                    <Plus size={20} />
                   </PrimaryButton>
                 </div>
               </div>
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left">
+              <table className="w-full text-left min-w-[1100px]">
                 <thead className="bg-slate-50/50 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                   <tr>
-                    <th className="px-6 py-4">Produto</th>
-                    <th className="px-6 py-4 w-24">Qtd</th>
-                    <th className="px-6 py-4 w-28">Vl. Unit</th>
-                    <th className="px-6 py-4 w-32">Desconto</th>
-                    <th className="px-6 py-4 w-32 text-right">Subtotal</th>
+                    <th className="px-6 py-4">Código</th>
+                    <th className="px-6 py-4 min-w-[150px]">Descrição</th>
+                    <th className="px-4 py-4 w-[140px] min-w-[140px]">QTD</th>
+                    <th className="px-4 py-4 w-[140px] min-w-[140px]">Comp.</th>
+                    <th className="px-4 py-4 w-[140px] min-w-[140px]">Larg.</th>
+                    <th className="px-4 py-4 w-20">Benef.</th>
+                    <th className="px-4 py-4 w-20">Unid.</th>
+                    <th className="px-4 py-4 w-[140px] min-w-[140px]">VL. Unit</th>
+                    <th className="px-4 py-4 w-[140px] min-w-[140px]">Desconto</th>
+                    <th className="px-6 py-4 w-[140px] min-w-[140px] text-right">Subtotal</th>
                     <th className="px-6 py-4 w-12"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {orderItems.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-50/30 transition-colors">
-                      <td className="px-6 py-4">
-                        <p className="font-bold text-slate-900 text-sm break-words">{item.description}</p>
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Unidade: {unitLabels[item.unit] || item.unit || '—'}</p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <input
-                          type="number"
-                          className="w-full p-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 outline-none focus:bg-white transition-all"
-                          step={item.unit === 'un' ? '1' : '0.01'}
-                          value={item.quantity}
-                          onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value))}
-                        />
-                      </td>
-                      <td className="px-6 py-4">
-                        <input
-                          type="number"
-                          className="w-full p-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 outline-none focus:bg-white transition-all"
-                          value={item.unitPrice}
-                          onChange={(e) => updateItem(item.id, 'unitPrice', parseFloat(e.target.value))}
-                        />
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-1">
+                  {orderItems.map((item) => {
+                    const prod = products.find(p => p.id === item.productId);
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50/30 transition-colors">
+                        <td className="px-6 py-4 text-[10px] font-bold text-slate-400">{prod?.code || '—'}</td>
+                        <td className="px-6 py-4">
+                          <p className="font-bold text-slate-900 text-sm break-words">{item.description}</p>
+                        </td>
+                        <td className="px-6 py-4">
                           <input
                             type="number"
-                            className="w-full p-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 outline-none focus:bg-white transition-all"
-                            value={item.discountValue}
-                            onChange={(e) => updateItem(item.id, 'discountValue', parseFloat(e.target.value))}
+                            className="w-full h-[48px] p-3 bg-slate-50 border border-slate-100 rounded-xl text-[17px] font-bold text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-[#9b2b29] transition-all text-right"
+                            step={item.unit === 'un' ? '1' : '0.01'}
+                            value={item.quantity}
+                            onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value))}
                           />
-                          <button
-                            onClick={() => updateItem(item.id, 'discountType', item.discountType === 'percentage' ? 'fixed' : 'percentage')}
-                            className="text-[10px] font-black text-slate-900 min-w-[20px] hover:scale-125 transition-transform"
-                          >
-                            {item.discountType === 'percentage' ? '%' : '$'}
+                        </td>
+                        <td className="px-6 py-4 text-xs font-bold text-slate-600">
+                          {item.unit === 'ML' || item.unit === 'm2' ? (
+                            <input
+                              type="number"
+                              className="w-full h-[48px] p-3 bg-slate-50 border border-slate-100 rounded-xl text-[17px] font-bold text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-[#9b2b29] transition-all text-right"
+                              step="0.01"
+                              value={item.comprimento || 0}
+                              onChange={(e) => updateItem(item.id, 'comprimento', parseFloat(e.target.value))}
+                            />
+                          ) : '—'}
+                        </td>
+                        <td className="px-6 py-4 text-xs font-bold text-slate-600">
+                          {item.unit === 'm2' ? (
+                            <input
+                              type="number"
+                              className="w-full h-[48px] p-3 bg-slate-50 border border-slate-100 rounded-xl text-[17px] font-bold text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-[#9b2b29] transition-all text-right"
+                              step="0.01"
+                              value={item.largura || 0}
+                              onChange={(e) => updateItem(item.id, 'largura', parseFloat(e.target.value))}
+                            />
+                          ) : '—'}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex justify-center items-center">
+                            <input
+                              type="checkbox"
+                              className="w-6 h-6 rounded border-gray-300 text-[#9b2b29] focus:ring-[#9b2b29]"
+                              checked={item.isBeneficiado}
+                              onChange={(e) => {
+                                const isChecked = e.target.checked;
+                                const currentProd = products.find(p => p.id === item.productId);
+                                const newPrice = currentProd ? (isChecked ? currentProd.price_benef : currentProd.price_bruto) : item.unitPrice;
+
+                                setOrderItems(items => items.map(it => {
+                                  if (it.id !== item.id) return it;
+                                  const updated = { ...it, isBeneficiado: isChecked, unitPrice: newPrice };
+                                  const sub = getItemBaseTotal(updated);
+                                  let discount = 0;
+                                  if (updated.discountType === 'percentage') {
+                                    discount = sub * (updated.discountValue / 100);
+                                  } else {
+                                    discount = updated.discountValue;
+                                  }
+                                  updated.total = Math.max(0, sub - discount);
+                                  return updated;
+                                }));
+                              }}
+                            />
+                            {item.isBeneficiado && <span className="ml-1 text-[8px] font-black uppercase text-amber-600 tracking-tighter">Benef.</span>}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-[10px] font-black text-slate-400">{unitLabels[item.unit] || item.unit || '—'}</td>
+                        <td className="px-6 py-4">
+                          <input
+                            type="number"
+                            className="w-full h-[48px] p-3 bg-slate-100 border border-slate-100 rounded-xl text-[17px] font-bold text-slate-500 outline-none text-right"
+                            value={item.unitPrice}
+                            readOnly
+                          />
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              className="w-full h-[48px] p-3 bg-slate-50 border border-slate-100 rounded-xl text-[17px] font-bold text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-[#9b2b29] transition-all text-right"
+                              value={item.discountValue}
+                              onChange={(e) => updateItem(item.id, 'discountValue', parseFloat(e.target.value))}
+                            />
+                            <button
+                              onClick={() => updateItem(item.id, 'discountType', item.discountType === 'percentage' ? 'fixed' : 'percentage')}
+                              className="text-[10px] font-black text-slate-900 min-w-[20px] hover:scale-125 transition-transform"
+                            >
+                              {item.discountType === 'percentage' ? '%' : '$'}
+                            </button>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-right font-bold text-slate-900 text-sm tabular-nums">
+                          R$ {item.total.toFixed(2)}
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <button onClick={() => removeItem(item.id)} className="text-slate-300 hover:text-red-500 transition-colors p-1">
+                            <Trash2 size={16} />
                           </button>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-right font-bold text-slate-900 text-sm tabular-nums">
-                        R$ {item.total.toFixed(2)}
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <button onClick={() => removeItem(item.id)} className="text-slate-300 hover:text-red-500 transition-colors p-1">
-                          <Trash2 size={16} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {orderItems.length === 0 && (
                     <tr>
                       <td colSpan={6} className="p-12 text-center text-slate-300 font-bold uppercase tracking-widest text-xs">Aguardando itens...</td>

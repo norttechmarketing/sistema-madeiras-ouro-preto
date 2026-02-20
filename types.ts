@@ -10,14 +10,16 @@ export interface Client {
   internalNotes?: string;
 }
 
-export type ProductUnit = 'm2' | 'm3' | 'm' | 'un';
+export type ProductUnit = 'm2' | 'm3' | 'm' | 'un' | 'ML' | 'Pç' | 'Kg' | 'JG';
 
 export interface Product {
   id: string;
   code: string;
   name: string;
   category: string;
-  price: number;
+  price: number; // For backward compatibility / default
+  price_bruto: number;
+  price_benef: number;
   cost: number;
   unit: ProductUnit;
 }
@@ -32,6 +34,10 @@ export interface OrderItem {
   discountType: 'percentage' | 'fixed';
   discountValue: number;
   total: number;
+  // New fields for Madeiras Ouro Preto
+  comprimento?: number;
+  largura?: number;
+  isBeneficiado?: boolean;
 }
 
 export interface Order {

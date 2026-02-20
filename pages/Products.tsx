@@ -20,7 +20,10 @@ const Products: React.FC = () => {
     code: '',
     category: '',
     price: 0,
-    unit: 'un'
+    price_bruto: 0,
+    price_benef: 0,
+    unit: 'un',
+    cost: 0
   });
 
   const fetchProducts = async () => {
@@ -46,7 +49,9 @@ const Products: React.FC = () => {
       const payload = {
         ...formData,
         price: Number(formData.price),
-        cost: 0
+        price_bruto: Number(formData.price_bruto),
+        price_benef: Number(formData.price_benef),
+        cost: Number(formData.cost || 0)
       };
 
       if (editingProduct) {
@@ -90,7 +95,7 @@ const Products: React.FC = () => {
       setFormData(product);
     } else {
       setEditingProduct(null);
-      setFormData({ name: '', code: '', category: '', price: 0, unit: 'un' });
+      setFormData({ name: '', code: '', category: '', price: 0, price_bruto: 0, price_benef: 0, unit: 'un', cost: 0 });
     }
     setIsModalOpen(true);
   };
@@ -101,7 +106,11 @@ const Products: React.FC = () => {
     'm2': 'm²',
     'm3': 'm³',
     'm': 'm',
-    'un': 'un'
+    'un': 'un',
+    'ML': 'ML',
+    'Pç': 'Pç',
+    'Kg': 'Kg',
+    'JG': 'JG'
   };
 
   const categories = ['Todas', ...new Set(products.map(p => p.category))];
@@ -243,14 +252,26 @@ const Products: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-1.5">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Preço Venda</label>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Preço Bruto</label>
                   <input
                     type="number" step="0.01" min="0" required
                     className="w-full p-3 border border-[#d9d7d8] rounded-xl text-sm font-semibold focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] outline-none transition-all"
-                    value={formData.price}
-                    onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
+                    value={formData.price_bruto}
+                    onChange={(e) => setFormData({ ...formData, price_bruto: parseFloat(e.target.value), price: parseFloat(e.target.value) })}
                   />
                 </div>
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Preço Beneficiado</label>
+                  <input
+                    type="number" step="0.01" min="0" required
+                    className="w-full p-3 border border-[#d9d7d8] rounded-xl text-sm font-semibold focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] outline-none transition-all"
+                    value={formData.price_benef}
+                    onChange={(e) => setFormData({ ...formData, price_benef: parseFloat(e.target.value) })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-1.5">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Unidade</label>
                   <select
@@ -262,7 +283,20 @@ const Products: React.FC = () => {
                     <option value="m">metro (m)</option>
                     <option value="m2">m²</option>
                     <option value="m3">m³</option>
+                    <option value="ML">metro linear (ML)</option>
+                    <option value="Pç">peça (Pç)</option>
+                    <option value="Kg">quilograma (Kg)</option>
+                    <option value="JG">jogo (JG)</option>
                   </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Custo (Opcional)</label>
+                  <input
+                    type="number" step="0.01" min="0"
+                    className="w-full p-3 border border-[#d9d7d8] rounded-xl text-sm font-semibold focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] outline-none transition-all"
+                    value={formData.cost}
+                    onChange={(e) => setFormData({ ...formData, cost: parseFloat(e.target.value) })}
+                  />
                 </div>
               </div>
 

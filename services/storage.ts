@@ -180,6 +180,8 @@ export const storage = {
         name: row.name,
         category: row.category,
         price: Number(row.price),
+        price_bruto: Number(row.price_bruto || row.price || 0),
+        price_benef: Number(row.price_benef || row.price || 0),
         cost: Number(row.cost),
         unit: row.unit
       }));
@@ -200,6 +202,8 @@ export const storage = {
           name: p.name,
           category: p.category,
           price: p.price,
+          price_bruto: p.price_bruto,
+          price_benef: p.price_benef,
           cost: p.cost,
           unit: p.unit,
           created_at: new Date().toISOString()
@@ -279,7 +283,10 @@ export const storage = {
           unit: item.unit,
           discountType: item.discount_type,
           discountValue: Number(item.discount_value),
-          total: Number(item.total)
+          total: Number(item.total),
+          comprimento: item.comprimento ? Number(item.comprimento) : undefined,
+          largura: item.largura ? Number(item.largura) : undefined,
+          isBeneficiado: item.is_beneficiado
         }))
       }));
     } catch (e) {
@@ -358,7 +365,10 @@ export const storage = {
             unit: item.unit,
             discount_type: item.discountType,
             discount_value: item.discountValue,
-            total: item.total
+            total: item.total,
+            comprimento: item.comprimento,
+            largura: item.largura,
+            is_beneficiado: item.isBeneficiado
           }));
 
           const { error: itemsError } = await supabase
