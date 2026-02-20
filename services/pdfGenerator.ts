@@ -185,8 +185,14 @@ export const generateOrderPDF = async (order: Order, openPrint = false, client?:
 
   doc.setFontSize(10);
   doc.setTextColor(grayColor);
-  doc.text(`Subtotal: R$ ${order.subtotal.toFixed(2)}`, rightMargin, finalY, { align: 'right' });
-  doc.text(`Descontos: R$ ${order.totalDiscount.toFixed(2)}`, rightMargin, finalY + 6, { align: 'right' });
+  doc.text(`Subtotal dos Itens: R$ ${order.subtotal.toFixed(2)}`, rightMargin, finalY, { align: 'right' });
+
+  if (order.globalDiscountAmount && order.globalDiscountAmount > 0) {
+    const discountLabel = order.globalDiscountType === 'percent'
+      ? `Desconto do Pedido (${order.globalDiscountValue}%):`
+      : 'Desconto do Pedido:';
+    doc.text(`${discountLabel} - R$ ${order.globalDiscountAmount.toFixed(2)}`, rightMargin, finalY + 6, { align: 'right' });
+  }
 
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
