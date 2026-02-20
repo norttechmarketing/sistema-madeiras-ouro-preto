@@ -204,7 +204,6 @@ export const storage = {
           price: p.price,
           price_bruto: p.price_bruto,
           price_benef: p.price_benef,
-          cost: p.cost,
           unit: p.unit,
           created_at: new Date().toISOString()
         };
