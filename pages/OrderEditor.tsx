@@ -17,6 +17,19 @@ function ceilToHalf(value: number): number {
   return Math.ceil(value * 2) / 2;
 }
 
+function normalizeWidthForArea(unit: string | undefined, width: number): number {
+  if (!Number.isFinite(width)) return 0;
+  // Se unit for m2 e largura >= 3, assumir que é cm, arredondar para múltiplo de 5 e fazer /100
+  if (unit === 'm2' || unit === 'm²') {
+    if (width >= 3) {
+      const roundedCm = Math.ceil(width / 5) * 5;
+      return roundedCm / 100;
+    }
+    return width;
+  }
+  return width;
+}
+
 const OrderEditor: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -50,22 +63,25 @@ const OrderEditor: React.FC = () => {
   const [newItem, setNewItem] = useState<{
     productId: string;
     description: string;
-    quantity: number;
-    price: number;
+    quantity: number | string;
+    price: number | string;
     unit: ProductUnit | string;
-    comprimento: number;
-    largura: number;
+    comprimento: number | string;
+    largura: number | string;
     isBeneficiado: boolean;
   }>({
     productId: '',
     description: '',
-    quantity: 1,
-    price: 0,
+    quantity: '',
+    price: '',
     unit: 'un',
-    comprimento: 0,
-    largura: 0,
+    comprimento: '',
+    largura: '',
     isBeneficiado: false
   });
+
+  const [globalDiscountType, setGlobalDiscountType] = useState<'percent' | 'fixed'>('fixed');
+  const [globalDiscountValue, setGlobalDiscountValue] = useState<number | string>('');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -92,6 +108,8 @@ const OrderEditor: React.FC = () => {
             setCustomerNotes(existing.customerNotes || '');
             setCreatedAt(existing.createdAt);
             setSelectedSellerId(existing.sellerId || '');
+            setGlobalDiscountType(existing.globalDiscountType || 'fixed');
+            setGlobalDiscountValue(existing.globalDiscountValue || '');
 
             const client = clientsData.find(c => c.id === existing.clientId);
             if (client) setSelectedClient(client);
@@ -113,21 +131,22 @@ const OrderEditor: React.FC = () => {
   }, [id]);
 
   const getItemBaseTotal = (item: Partial<OrderItem>) => {
-    const qty = item.quantity || 0;
-    const unitPrice = item.unitPrice || 0;
-    const comp = item.comprimento || 0;
-    const larg = item.largura || 0;
+    const qty = Number(item.quantity || 0);
+    const unitPrice = Number(item.unitPrice || 0);
+    const comp = Number(item.comprimento || 0);
+    const larg = Number(item.largura || 0);
     const unit = item.unit;
 
-    // Arredondar para cálculo (múltiplos de 0,50)
+    // Arredondar comprimento para cálculo (múltiplos de 0,50)
     const compCalc = ceilToHalf(comp);
-    const largCalc = ceilToHalf(larg / 100);
+    // Normalizar largura: se >= 3 em m², converter cm para m
+    const wCalc = normalizeWidthForArea(unit, larg);
 
     if (unit === 'ML') {
       return qty * compCalc * unitPrice;
     } else if (unit === 'm2') {
       if (larg > 0) {
-        return qty * compCalc * largCalc * unitPrice;
+        return qty * compCalc * wCalc * unitPrice;
       }
       return qty * unitPrice;
     } else {
@@ -135,15 +154,11 @@ const OrderEditor: React.FC = () => {
     }
   };
 
-  const subtotal = orderItems.reduce((acc, item) => acc + getItemBaseTotal(item), 0);
-  const totalDiscount = orderItems.reduce((acc, item) => {
-    const itemSub = getItemBaseTotal(item);
-    const discount = item.discountType === 'percentage'
-      ? itemSub * (item.discountValue / 100)
-      : item.discountValue;
-    return acc + discount;
-  }, 0);
-  const total = subtotal - totalDiscount;
+  const subtotalItems = orderItems.reduce((acc, item) => acc + item.total, 0);
+  const globalDiscountAmount = globalDiscountType === 'percent'
+    ? subtotalItems * (Number(globalDiscountValue || 0) / 100)
+    : Number(globalDiscountValue || 0);
+  const total = Math.max(0, subtotalItems - globalDiscountAmount);
 
   const addItem = () => {
     if (!newItem.description) return;
@@ -156,11 +171,11 @@ const OrderEditor: React.FC = () => {
     const baseItem: Partial<OrderItem> = {
       productId: newItem.productId || undefined,
       description: newItem.description,
-      quantity: newItem.quantity,
-      unitPrice: newItem.price,
+      quantity: Number(newItem.quantity || 0),
+      unitPrice: Number(newItem.price || 0),
       unit: newItem.unit,
-      comprimento: newItem.comprimento || undefined,
-      largura: newItem.largura || undefined,
+      comprimento: newItem.comprimento ? Number(newItem.comprimento) : undefined,
+      largura: newItem.largura ? Number(newItem.largura) : undefined,
       isBeneficiado: newItem.isBeneficiado,
       discountType: 'fixed',
       discountValue: 0,
@@ -176,11 +191,11 @@ const OrderEditor: React.FC = () => {
     setNewItem({
       productId: '',
       description: '',
-      quantity: 1,
-      price: 0,
+      quantity: '',
+      price: '',
       unit: 'un',
-      comprimento: 0,
-      largura: 0,
+      comprimento: '',
+      largura: '',
       isBeneficiado: false
     });
     setProductSearch('');
@@ -189,7 +204,8 @@ const OrderEditor: React.FC = () => {
   const updateItem = (id: string, field: keyof OrderItem, value: any) => {
     setOrderItems(items => items.map(item => {
       if (item.id !== id) return item;
-      const updated = { ...item, [field]: value };
+      const numValue = value === '' ? 0 : Number(value);
+      const updated = { ...item, [field]: numValue };
 
       let discount = 0;
       const sub = getItemBaseTotal(updated);
@@ -213,7 +229,7 @@ const OrderEditor: React.FC = () => {
       ...newItem,
       productId: prod.id,
       description: prod.name,
-      quantity: 1,
+      quantity: '',
       price: newItem.isBeneficiado ? prod.price_benef : prod.price_bruto,
       unit: prod.unit || 'un'
     });
@@ -235,18 +251,21 @@ const OrderEditor: React.FC = () => {
       id: id === 'new' ? uuid() : id!,
       clientId: selectedClient.id,
       clientName: selectedClient.name,
-      sellerId: seller?.id,
+      sellerId: selectedSellerId || undefined,
       sellerName: seller?.name,
-      date: createdAt,
+      date: new Date().toISOString(),
       status: orderStatus,
       type: orderType,
       items: orderItems,
-      subtotal,
-      totalDiscount,
-      total,
+      subtotal: subtotalItems,
+      totalDiscount: 0, // Not used primarily in this version but kept for type compatibility
+      globalDiscountType: globalDiscountType,
+      globalDiscountValue: Number(globalDiscountValue || 0),
+      globalDiscountAmount: globalDiscountAmount,
+      total: total,
       internalNotes,
       customerNotes,
-      createdAt
+      createdAt: createdAt || new Date().toISOString()
     };
 
     try {
@@ -510,7 +529,7 @@ Posso te ajudar em mais algo?`;
                     step={newItem.unit === 'un' ? '1' : '0.01'}
                     min="0.01"
                     value={newItem.quantity}
-                    onChange={e => setNewItem({ ...newItem, quantity: parseFloat(e.target.value) })}
+                    onChange={e => setNewItem({ ...newItem, quantity: e.target.value })}
                   />
                 </div>
 
@@ -524,22 +543,22 @@ Posso te ajudar em mais algo?`;
                       step="0.01"
                       min="0.01"
                       value={newItem.comprimento}
-                      onChange={e => setNewItem({ ...newItem, comprimento: parseFloat(e.target.value) })}
+                      onChange={e => setNewItem({ ...newItem, comprimento: e.target.value })}
                     />
                   </div>
                 )}
 
                 {newItem.unit === 'm2' && (
                   <div className="w-[140px] space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Larg.(cm)</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">LARG. (cm)</label>
                     <input
                       type="number"
                       className="w-full h-[48px] p-3 bg-white border border-[#d9d7d8] rounded-xl text-[17px] font-bold outline-none focus:ring-2 focus:ring-[#9b2b29] focus:border-[#9b2b29] focus:bg-white transition-all text-right"
-                      placeholder="0,00"
+                      placeholder="ex: 20 = 20cm"
                       step="0.01"
                       min="0"
                       value={newItem.largura}
-                      onChange={e => setNewItem({ ...newItem, largura: parseFloat(e.target.value) })}
+                      onChange={e => setNewItem({ ...newItem, largura: e.target.value })}
                     />
                   </div>
                 )}
@@ -567,7 +586,7 @@ Posso te ajudar em mais algo?`;
                 <div className="w-[160px] space-y-1.5">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Preço Unit.</label>
                   <div className="w-full h-[48px] p-3 bg-slate-100 border border-slate-200 rounded-xl text-[17px] font-black text-slate-600 flex items-center justify-end">
-                    R$ {newItem.price.toFixed(2)}
+                    R$ {Number(newItem.price || 0).toFixed(2)}
                   </div>
                 </div>
 
@@ -613,8 +632,8 @@ Posso te ajudar em mais algo?`;
                             type="number"
                             className="w-full h-[48px] p-3 bg-slate-50 border border-slate-100 rounded-xl text-[17px] font-bold text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-[#9b2b29] transition-all text-right"
                             step={item.unit === 'un' ? '1' : '0.01'}
-                            value={item.quantity}
-                            onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value))}
+                            value={item.quantity || ''}
+                            onChange={(e) => updateItem(item.id, 'quantity', e.target.value)}
                           />
                         </td>
                         <td className="px-6 py-4 text-xs font-bold text-slate-600">
@@ -623,8 +642,8 @@ Posso te ajudar em mais algo?`;
                               type="number"
                               className="w-full h-[48px] p-3 bg-slate-50 border border-slate-100 rounded-xl text-[17px] font-bold text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-[#9b2b29] transition-all text-right"
                               step="0.01"
-                              value={item.comprimento || 0}
-                              onChange={(e) => updateItem(item.id, 'comprimento', parseFloat(e.target.value))}
+                              value={item.comprimento || ''}
+                              onChange={(e) => updateItem(item.id, 'comprimento', e.target.value)}
                             />
                           ) : '—'}
                         </td>
@@ -634,8 +653,8 @@ Posso te ajudar em mais algo?`;
                               type="number"
                               className="w-full h-[48px] p-3 bg-slate-50 border border-slate-100 rounded-xl text-[17px] font-bold text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-[#9b2b29] transition-all text-right"
                               step="0.01"
-                              value={item.largura || 0}
-                              onChange={(e) => updateItem(item.id, 'largura', parseFloat(e.target.value))}
+                              value={item.largura || ''}
+                              onChange={(e) => updateItem(item.id, 'largura', e.target.value)}
                             />
                           ) : '—'}
                         </td>
@@ -682,8 +701,8 @@ Posso te ajudar em mais algo?`;
                             <input
                               type="number"
                               className="w-full h-[48px] p-3 bg-slate-50 border border-slate-100 rounded-xl text-[17px] font-bold text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-[#9b2b29] transition-all text-right"
-                              value={item.discountValue}
-                              onChange={(e) => updateItem(item.id, 'discountValue', parseFloat(e.target.value))}
+                              value={item.discountValue || ''}
+                              onChange={(e) => updateItem(item.id, 'discountValue', e.target.value)}
                             />
                             <button
                               onClick={() => updateItem(item.id, 'discountType', item.discountType === 'percentage' ? 'fixed' : 'percentage')}
@@ -714,17 +733,38 @@ Posso te ajudar em mais algo?`;
             </div>
 
             <div className="p-8 bg-slate-50/50 border-t border-slate-100">
-              <div className="flex flex-col items-end gap-2">
-                <div className="flex justify-between w-full max-w-[280px] text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  <span>Subtotal:</span>
-                  <span className="text-slate-600">R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              <div className="flex flex-col items-end gap-3">
+                <div className="flex justify-between w-full max-w-[320px] items-center">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Subtotal dos Itens:</span>
+                  <span className="text-sm font-bold text-slate-600">R$ {subtotalItems.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                 </div>
-                <div className="flex justify-between w-full max-w-[280px] text-[10px] font-black text-red-500 uppercase tracking-widest">
-                  <span>Descontos:</span>
-                  <span>- R$ {totalDiscount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+
+                <div className="flex flex-col w-full max-w-[320px] p-4 bg-white rounded-2xl border border-slate-100 shadow-sm gap-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Desconto do Pedido:</span>
+                    <button
+                      onClick={() => setGlobalDiscountType(prev => prev === 'percent' ? 'fixed' : 'percent')}
+                      className="px-2 py-1 bg-slate-100 rounded-lg text-[10px] font-black text-slate-600 hover:bg-slate-200 transition-colors"
+                    >
+                      {globalDiscountType === 'percent' ? '%' : 'R$'}
+                    </button>
+                  </div>
+                  <input
+                    type="number"
+                    placeholder="0,00"
+                    className="w-full h-[40px] px-3 bg-slate-50 border border-slate-100 rounded-xl text-right font-bold text-red-500 outline-none focus:ring-2 focus:ring-[#9b2b29] transition-all"
+                    value={globalDiscountValue}
+                    onChange={(e) => setGlobalDiscountValue(e.target.value)}
+                  />
+                  {globalDiscountType === 'percent' && Number(globalDiscountValue) > 0 && (
+                    <div className="text-right text-[10px] font-bold text-red-400">
+                      - R$ {globalDiscountAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </div>
+                  )}
                 </div>
-                <div className="flex justify-between w-full max-w-[280px] text-3xl font-bold text-slate-900 mt-4 pt-4 border-t-2 border-dashed border-slate-200 tabular-nums">
-                  <span className="text-[10px] font-black uppercase self-center tracking-widest text-slate-400">Total:</span>
+
+                <div className="flex justify-between w-full max-w-[320px] text-3xl font-bold text-slate-900 mt-4 pt-4 border-t-2 border-dashed border-slate-200 tabular-nums">
+                  <span className="text-[10px] font-black uppercase self-center tracking-widest text-slate-400">Total Final:</span>
                   <span>R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
