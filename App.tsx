@@ -22,7 +22,8 @@ import {
   getSupabaseConfig,
   setSupabaseLocalConfig,
   clearSupabaseLocalConfig,
-  checkSessionHealth
+  checkSessionHealth,
+  withTimeout
 } from './lib/supabase';
 import { AlertCircle, Save, Trash2, Database } from 'lucide-react';
 
@@ -32,18 +33,6 @@ const clearSupabaseAuthToken = () => {
     const tokenKey = keys.find(k => k.includes('-auth-token'));
     if (tokenKey) localStorage.removeItem(tokenKey);
   } catch { }
-};
-
-const withTimeout = async <T,>(promise: Promise<T>, ms = 6000): Promise<T> => {
-  let t: any;
-  const timeout = new Promise<T>((_, reject) => {
-    t = setTimeout(() => reject(new Error(`Timeout after ${ms}ms`)), ms);
-  });
-  try {
-    return await Promise.race([promise, timeout]);
-  } finally {
-    clearTimeout(t);
-  }
 };
 
 function App() {
@@ -74,19 +63,24 @@ function App() {
 
     // 1. Check active session immediately
     const checkSession = async () => {
+      const client = supabase;
+      if (!client) {
+        if (mounted) setIsAuthLoading(false);
+        return;
+      }
       if (mounted) setIsAuthLoading(true);
 
       try {
-        if (!supabase) throw new Error("Supabase not initialized");
-
         // CLEANUP: Check for stale/invalid tokens before trying to use them
         try {
-          await withTimeout(checkSessionHealth(), 4000);
+          await withTimeout(() => checkSessionHealth(), 4000, { silent: true });
         } catch (e) {
           console.warn("Pre-check health timeout or error:", e);
         }
 
-        const { data: { session }, error } = await withTimeout(supabase.auth.getSession(), 6000);
+        const authResult: any = await withTimeout(() => client.auth.getSession(), 10000, { retry: true });
+        const { data: { session }, error } = authResult || { data: { session: null }, error: null };
+
 
         if (isDev) {
           console.log("[AUTH] getSession done", { hasSession: !!session, error });
@@ -98,7 +92,7 @@ function App() {
         }
 
         if (session?.user) {
-          await withTimeout(fetchProfile(session.user), 6000);
+          await withTimeout(() => fetchProfile(session.user), 6000, { silent: true });
         } else {
           // FALLBACK: Check for Mock User in LocalStorage (Prototype Mode)
           const mockUserJson = localStorage.getItem('mop_mock_user');
@@ -111,7 +105,8 @@ function App() {
       } catch (error) {
         console.error("Unexpected session check error (Resetting):", error);
         clearSupabaseAuthToken();
-        try { await supabase.auth.signOut(); } catch { }
+        try { await client.auth.signOut(); } catch { }
+
         if (mounted) setUser(null);
       } finally {
         // ALWAYS finish loading to prevent infinite spinner
@@ -131,9 +126,10 @@ function App() {
 
       if (session?.user) {
         if (!user || user.id !== session.user.id) {
-          await withTimeout(fetchProfile(session.user), 6000).catch(console.error);
+          await withTimeout(() => fetchProfile(session.user), 6000, { silent: true });
         }
       } else {
+
         const mockUser = localStorage.getItem('mop_mock_user');
         if (!mockUser) {
           setUser(null);
@@ -157,38 +153,19 @@ function App() {
         .eq('id', sessionUser.id)
         .single();
 
-      const { data: profile, error } = await withTimeout(query, 6000);
+      // Reduzido timeout para 8s e removido retry para não bloquear startup
+      const result: any = await withTimeout(() => query, 8000, { silent: true });
+      const { data: profile, error } = result || { data: null, error: null };
 
       if (error || !profile) {
-        console.log("Profile not found or error, creating new profile for:", sessionUser.email);
+        if (isDev) console.log("Profile not found or error, using default role 'sales' for:", sessionUser.email);
 
-        const newProfile = {
+        setUser({
           id: sessionUser.id,
           name: sessionUser.user_metadata?.name || sessionUser.email?.split('@')[0] || 'Novo Usuário',
           email: sessionUser.email || '',
           role: 'sales'
-        };
-
-        const { error: insertError } = await supabase
-          .from('profiles')
-          .insert([newProfile]);
-
-        if (insertError) {
-          console.error("Failed to create profile:", insertError);
-          setUser({
-            id: sessionUser.id,
-            name: newProfile.name,
-            email: newProfile.email,
-            role: 'sales'
-          });
-        } else {
-          setUser({
-            id: sessionUser.id,
-            name: newProfile.name,
-            email: newProfile.email,
-            role: 'sales'
-          });
-        }
+        });
         return;
       }
 
@@ -196,14 +173,14 @@ function App() {
         id: sessionUser.id,
         name: profile.name,
         email: profile.email || sessionUser.email || '',
-        role: profile.role
+        role: profile.role || 'sales'
       });
 
     } catch (err) {
-      console.error("Unexpected error fetching profile:", err);
+      console.error("Unexpected error fetching profile (Continuing with defaults):", err);
       setUser({
         id: sessionUser.id,
-        name: sessionUser.email?.split('@')[0] || 'Usuário',
+        name: sessionUser.user_metadata?.name || sessionUser.email?.split('@')[0] || 'Usuário',
         email: sessionUser.email || '',
         role: 'sales'
       });

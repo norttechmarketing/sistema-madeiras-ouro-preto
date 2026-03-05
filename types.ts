@@ -38,6 +38,7 @@ export interface OrderItem {
   comprimento?: number;
   largura?: number;
   isBeneficiado?: boolean;
+  category?: string;
 }
 
 export interface Order {
@@ -58,6 +59,7 @@ export interface Order {
   total: number;
   internalNotes?: string;
   customerNotes?: string;
+  paymentMethod?: string;
   createdAt: string;
 }
 

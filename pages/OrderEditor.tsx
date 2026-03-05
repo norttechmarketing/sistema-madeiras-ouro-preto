@@ -43,6 +43,8 @@ const OrderEditor: React.FC = () => {
   const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [vendedores, setVendedores] = useState<Seller[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isClientsModalOpen, setIsClientsModalOpen] = useState(false);
 
   // Editor State
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -52,6 +54,8 @@ const OrderEditor: React.FC = () => {
   const [orderStatus, setOrderStatus] = useState<'Rascunho' | 'Enviado' | 'Aprovado' | 'Recusado'>('Rascunho');
   const [internalNotes, setInternalNotes] = useState('');
   const [customerNotes, setCustomerNotes] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('');
+  const [otherPaymentMethod, setOtherPaymentMethod] = useState('');
   const [createdAt, setCreatedAt] = useState(new Date().toISOString());
 
   // UI State
@@ -69,6 +73,7 @@ const OrderEditor: React.FC = () => {
     comprimento: number | string;
     largura: number | string;
     isBeneficiado: boolean;
+    category: string;
   }>({
     productId: '',
     description: '',
@@ -77,7 +82,8 @@ const OrderEditor: React.FC = () => {
     unit: 'un',
     comprimento: '',
     largura: '',
-    isBeneficiado: false
+    isBeneficiado: false,
+    category: ''
   });
 
   const [globalDiscountType, setGlobalDiscountType] = useState<'percent' | 'fixed'>('fixed');
@@ -106,6 +112,7 @@ const OrderEditor: React.FC = () => {
             setOrderItems(existing.items || []);
             setInternalNotes(existing.internalNotes || '');
             setCustomerNotes(existing.customerNotes || '');
+            setPaymentMethod(existing.paymentMethod || '');
             setCreatedAt(existing.createdAt);
             setSelectedSellerId(existing.sellerId || '');
             setGlobalDiscountType(existing.globalDiscountType || 'fixed');
@@ -177,7 +184,9 @@ const OrderEditor: React.FC = () => {
       comprimento: newItem.comprimento ? Number(newItem.comprimento) : undefined,
       largura: newItem.largura ? Number(newItem.largura) : undefined,
       isBeneficiado: newItem.isBeneficiado,
+      category: newItem.category,
       discountType: 'fixed',
+
       discountValue: 0,
     };
 
@@ -196,7 +205,8 @@ const OrderEditor: React.FC = () => {
       unit: 'un',
       comprimento: '',
       largura: '',
-      isBeneficiado: false
+      isBeneficiado: false,
+      category: ''
     });
     setProductSearch('');
   };
@@ -231,7 +241,8 @@ const OrderEditor: React.FC = () => {
       description: prod.name,
       quantity: '',
       price: newItem.isBeneficiado ? prod.price_benef : prod.price_bruto,
-      unit: prod.unit || 'un'
+      unit: prod.unit || 'un',
+      category: prod.category || ''
     });
     setProductSearch(prod.name);
   };
@@ -265,6 +276,7 @@ const OrderEditor: React.FC = () => {
       total: total,
       internalNotes,
       customerNotes,
+      paymentMethod: paymentMethod === 'Outros' ? otherPaymentMethod : paymentMethod,
       createdAt: createdAt || new Date().toISOString()
     };
 
@@ -328,17 +340,57 @@ Posso te ajudar em mais algo?`;
     }
   };
 
-  const handlePrint = async () => {
-    const order = await saveOrder(true);
-    if (order) {
-      let clientObj = selectedClient;
-      if (!clientObj && order.clientId) {
-        const allClients = await storage.getClients();
-        clientObj = allClients.find(c => c.id === order.clientId) || null;
+  const handlePrint = () => {
+    if (isExporting) return;
+    setIsExporting(true);
+
+    try {
+      const seller = vendedores.find(v => v.id === selectedSellerId);
+
+      // Constrói objeto de pedido diretamente do state (INSTANTÂNEO)
+      const mockOrder: any = {
+        id: id === 'new' ? 'PREVIA' : id!,
+        clientId: selectedClient?.id || '',
+        clientName: selectedClient?.name || 'Cliente',
+        sellerId: selectedSellerId,
+        sellerName: seller?.name || 'Vendedor',
+        date: new Date().toISOString(),
+        status: orderStatus,
+        type: orderType,
+        items: orderItems,
+        subtotal: subtotalItems,
+        total: total,
+        paymentMethod: paymentMethod === 'Outros' ? otherPaymentMethod : paymentMethod,
+        customerNotes: customerNotes,
+        globalDiscountAmount: Number(globalDiscountAmount || 0),
+        globalDiscountType: globalDiscountType,
+        globalDiscountValue: Number(globalDiscountValue || 0),
+        createdAt: createdAt || new Date().toISOString()
+      };
+
+      // Chama gerador (PDF é gerado imediatamente em aba separada ou download)
+      generateOrderPDF(mockOrder, true, selectedClient || undefined)
+        .catch(err => {
+          console.error("PDF Generation Error:", err);
+          alert("Não foi possível gerar o PDF. Verifique se há muito conteúdo.");
+        })
+        .finally(() => {
+          setIsExporting(false);
+        });
+
+      // Segundo plano: Tentar salvar o pedido sem bloquear a UI se for novo
+      if (id === 'new') {
+        saveOrder(true).catch(e => console.warn("Auto-save failed in background", e));
       }
-      await generateOrderPDF(order, true, clientObj || undefined);
+
+    } catch (error: any) {
+      console.error("Critical Export Component error:", error);
+      alert(`Erro crítico na UI ao gerar PDF: ${error.message}`);
+      setIsExporting(false);
     }
   };
+
+
 
   const unitLabels: Record<string, string> = {
     'm2': 'm²', 'm3': 'm³', 'm': 'm', 'un': 'un', 'ML': 'ML', 'Pç': 'Pç', 'Kg': 'Kg', 'JG': 'JG'
@@ -479,6 +531,36 @@ Posso te ajudar em mais algo?`;
                   onChange={e => setCustomerNotes(e.target.value)}
                   placeholder="Ex: Entrega inclusa, prazo de 5 dias úteis..."
                 />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Forma de Pagamento</label>
+                <div className="relative">
+                  <select
+                    className="w-full appearance-none p-2.5 bg-slate-50 border border-[#d9d7d8] rounded-xl font-bold text-sm outline-none focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] transition-all"
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                  >
+                    <option value="">Selecionar...</option>
+                    <option value="Pix">Pix</option>
+                    <option value="Dinheiro">Dinheiro</option>
+                    <option value="Cartão (Débito)">Cartão (Débito)</option>
+                    <option value="Cartão (Crédito)">Cartão (Crédito)</option>
+                    <option value="Boleto">Boleto</option>
+                    <option value="Transferência">Transferência</option>
+                    <option value="Outros">Outros</option>
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
+                {paymentMethod === 'Outros' && (
+                  <input
+                    type="text"
+                    className="w-full mt-2 p-2.5 bg-slate-50 border border-[#d9d7d8] rounded-xl font-bold text-sm outline-none focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] transition-all"
+                    placeholder="Especifique..."
+                    value={otherPaymentMethod}
+                    onChange={(e) => setOtherPaymentMethod(e.target.value)}
+                  />
+                )}
               </div>
             </div>
           </Card>
@@ -625,8 +707,14 @@ Posso te ajudar em mais algo?`;
                       <tr key={item.id} className="hover:bg-slate-50/30 transition-colors">
                         <td className="px-6 py-4 text-[10px] font-bold text-slate-400">{prod?.code || '—'}</td>
                         <td className="px-6 py-4">
+                          {item.category && (
+                            <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-0.5">
+                              {item.category}
+                            </p>
+                          )}
                           <p className="font-bold text-slate-900 text-sm break-words">{item.description}</p>
                         </td>
+
                         <td className="px-6 py-4">
                           <input
                             type="number"
@@ -796,10 +884,19 @@ Posso te ajudar em mais algo?`;
             </button>
             <PrimaryButton
               onClick={handlePrint}
-              disabled={isSaving}
+              disabled={isSaving || isExporting}
               className="flex-1 sm:flex-none min-w-[150px] shadow-lg shadow-slate-900/20"
             >
-              <Printer size={18} /> <span>Exportar {orderType}</span>
+              {isExporting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  <span>Exportando...</span>
+                </>
+              ) : (
+                <>
+                  <Printer size={18} /> <span>Exportar {orderType}</span>
+                </>
+              )}
             </PrimaryButton>
           </div>
         </div>

@@ -12,28 +12,31 @@ interface ProtectedRouteProps {
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ user, children, allowedRoles }) => {
   const location = useLocation();
 
-  // Helper for safe environment access
   const isDev = (() => {
-    try { 
+    try {
       // @ts-ignore
-      return import.meta.env?.DEV; 
+      return import.meta.env?.DEV;
     } catch { return false; }
   })();
 
   if (isDev) {
-    console.log("[GUARD]", { 
-      hasUser: !!user, 
-      path: location.pathname, 
-      role: user?.role,
-      allowed: allowedRoles 
+    console.log("[GUARD]", {
+      hasUser: !!user,
+      path: location.pathname,
+      role: user?.role || 'none',
+      restrictedTo: allowedRoles || 'public'
     });
   }
-  
+
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-  if (allowedRoles && !allowedRoles.includes(user.role)) {
+  // If role is missing but user exists, we allow basic access (sales role default)
+  const currentRole = user.role || 'sales';
+
+  if (allowedRoles && !allowedRoles.includes(currentRole as any)) {
+    console.warn(`[GUARD] Access denied for ${currentRole} at ${location.pathname}. Allowed: ${allowedRoles}`);
     return <Navigate to="/dashboard" replace />;
   }
 

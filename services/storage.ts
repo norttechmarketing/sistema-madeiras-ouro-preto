@@ -1,5 +1,5 @@
 
-import { supabase, isConfigured } from '../lib/supabase';
+import { supabase, isConfigured, withTimeout } from '../lib/supabase';
 import { Client, Product, Order, OrderItem, User, Seller, AuditLog } from '../types';
 
 // --- HELPER: UUID GENERATOR & VALIDATOR ---
@@ -54,43 +54,63 @@ const toIso = (v: any) => {
 
 const generateId = () => normalizeId();
 
+let cachedUser: User | null = null;
+
 export const storage = {
   // --- AUTH / USER ---
   getCurrentUser: async (): Promise<User | null> => {
     if (!isConfigured || !supabase) return null;
 
+    // 1. Usar cache se disponível para performance e evitar chamadas repetidas
+    if (cachedUser) return cachedUser;
+
+    const client = supabase; // Local reference to help TS narrow nullability
+
     try {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      // 2. Timeout maior e retry para sessões (crítico)
+      const sessionResult: any = await withTimeout(() => client.auth.getSession(), 20000, { retry: true });
+      if (!sessionResult) return null;
+
+      const { data: { session }, error: sessionError } = sessionResult;
       if (sessionError || !session?.user) return null;
 
-      // Fetch profile to get role and name
-      const { data: profile, error: profileError } = await supabase
+      // 3. Fetch de profile (não crítico): retry e silent=true para não travar app
+      const query = () => client
         .from('profiles')
         .select('*')
         .eq('id', session.user.id)
         .single();
 
-      if (profileError) {
-        // Fallback if profile doesn't exist yet
-        return {
+      // 3. Fetch de profile (não crítico): SEM RETRY para ser instantâneo, e silent=true para não travar app
+      const result: any = await withTimeout(query, 8000, { silent: true });
+      const { data: profile, error: profileError } = result || { data: null, error: null };
+
+      if (profileError || !profile) {
+        // Fallback: usar dados iniciais do meta do auth
+        cachedUser = {
           id: session.user.id,
           email: session.user.email || '',
           name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Usuário',
-          role: 'sales'
+          role: profile?.role || 'sales'
         };
+        return cachedUser;
       }
 
-      return {
+      cachedUser = {
         id: session.user.id,
         email: session.user.email || '',
         name: profile.name,
-        role: profile.role
+        role: profile.role || 'sales'
       };
+
+      return cachedUser;
     } catch (err) {
-      console.error("Storage getCurrentUser error:", err);
+      console.error("Storage getCurrentUser fatal error:", err);
       return null;
     }
   },
+
+
 
   // --- CLIENTS ---
   getClients: async (): Promise<Client[]> => {
@@ -275,6 +295,7 @@ export const storage = {
         total: Number(row.total),
         internalNotes: row.internal_notes,
         customerNotes: row.customer_notes,
+        paymentMethod: row.payment_method,
         createdAt: typeof row.created_at === 'string' ? row.created_at : new Date(row.created_at || Date.now()).toISOString(),
         items: (row.items || []).map((item: any) => ({
           id: item.id,
@@ -286,6 +307,7 @@ export const storage = {
           discountType: item.discount_type,
           discountValue: Number(item.discount_value),
           total: Number(item.total),
+          category: item.category,
           comprimento: item.comprimento ? Number(item.comprimento) : undefined,
           largura: item.largura ? Number(item.largura) : undefined,
           isBeneficiado: item.is_beneficiado
@@ -300,6 +322,7 @@ export const storage = {
   saveOrders: async (orders: Order[]) => {
     if (!isConfigured || !supabase) return;
 
+    const client = supabase;
     try {
       const user = await storage.getCurrentUser();
       if (!user) throw new Error("Usuário não autenticado.");
@@ -310,10 +333,21 @@ export const storage = {
         const sellerId = order.sellerId || user.id;
         const sellerName = order.sellerName || user.name;
 
-        // Enforce Seller ID integrity if not admin
-        if (user.role !== 'admin') {
-          // Allow creating new or editing own, check ownership later if needed
-          // But here we rely on the object data.
+        // Enforce Seller ID integrity
+        if (!sellerId) {
+          throw new Error("Sessão expirada ou sem vendedor vinculado. Por favor, faça login novamente.");
+        }
+
+        // Ensure seller exists in 'sellers' table before saving order
+        const sellerCheckResult: any = await withTimeout(() => client.from('sellers').select('id').eq('id', sellerId).single(), 20000, { retry: true, silent: true });
+        const existingSeller = sellerCheckResult?.data;
+
+        if (!existingSeller) {
+          await withTimeout(() => client.from('sellers').insert({
+            id: sellerId,
+            name: sellerName || 'Vendedor',
+            is_active: true
+          }), 20000, { retry: true });
         }
 
         const headerPayload = {
@@ -322,7 +356,7 @@ export const storage = {
           client_name: order.clientName,
           seller_id: sellerId,
           seller_name: sellerName,
-          date: toIso(order.date), // Normalizado para ISO String
+          date: toIso(order.date),
           status: order.status,
           type: order.type,
           subtotal: order.subtotal,
@@ -333,13 +367,13 @@ export const storage = {
           total: order.total,
           internal_notes: order.internalNotes,
           customer_notes: order.customerNotes,
+          payment_method: order.paymentMethod,
           created_at: new Date().toISOString()
         };
 
         // --- 2. UPSERT HEADER ---
-        const { error: headerError } = await supabase
-          .from('orders')
-          .upsert(headerPayload);
+        const headerResult: any = await withTimeout(() => client.from('orders').upsert(headerPayload), 20000, { retry: true });
+        const headerError = headerResult?.error;
 
         if (headerError) {
           console.error("Error saving order header:", headerError);
@@ -347,16 +381,7 @@ export const storage = {
         }
 
         // --- 3. HANDLE ITEMS (Delete Old -> Insert New) ---
-        // First, delete existing items for this order to avoid duplicates/orphans
-        const { error: deleteError } = await supabase
-          .from('order_items')
-          .delete()
-          .eq('order_id', orderId);
-
-        if (deleteError) {
-          console.error("Error clearing old items:", deleteError);
-          throw new Error(`Erro ao atualizar itens: ${deleteError.message}`);
-        }
+        await withTimeout(() => client.from('order_items').delete().eq('order_id', orderId), 20000, { retry: true });
 
         // If there are items, insert them
         if (order.items && order.items.length > 0) {
@@ -371,14 +396,14 @@ export const storage = {
             discount_type: item.discountType,
             discount_value: item.discountValue,
             total: item.total,
+            category: item.category,
             comprimento: item.comprimento,
             largura: item.largura,
             is_beneficiado: item.isBeneficiado
           }));
 
-          const { error: itemsError } = await supabase
-            .from('order_items')
-            .insert(itemsPayload);
+          const itemsResult: any = await withTimeout(() => client.from('order_items').insert(itemsPayload), 20000, { retry: true });
+          const itemsError = itemsResult?.error;
 
           if (itemsError) {
             console.error("Error saving order items:", itemsError);
@@ -388,10 +413,10 @@ export const storage = {
       }
     } catch (err) {
       console.error("Unexpected error in saveOrders:", err);
-      // Rethrow para a UI tratar o estado de loading corretamente (parar spinner e mostrar erro)
       throw err;
     }
   },
+
 
   deleteOrder: async (id: string) => {
     if (!isConfigured || !supabase) return;
@@ -478,8 +503,10 @@ export const storage = {
   // --- SELLERS (using dedicated table) ---
   getSellers: async (onlyActive = false): Promise<Seller[]> => {
     if (!isConfigured || !supabase) return [];
+
+    const client = supabase;
     try {
-      let query = supabase
+      let query = client
         .from('sellers')
         .select('*');
 
@@ -487,10 +514,12 @@ export const storage = {
         query = query.eq('is_active', true);
       }
 
-      const { data, error } = await query.order('name');
+      // Use timeout (não crítico): sem retry para não segurar a UI no carregamento
+      const result: any = await withTimeout(() => query.order('name'), 8000, { silent: true });
+      const { data, error } = result || { data: null, error: null };
 
       if (error) {
-        console.error('Error fetching sellers:', error);
+        console.warn('Error fetching sellers (using empty list):', error);
         return [];
       }
       return (data || []).map((row: any) => ({
@@ -505,6 +534,7 @@ export const storage = {
       return [];
     }
   },
+
 
   saveSeller: async (seller: any) => {
     if (!isConfigured || !supabase) return;
