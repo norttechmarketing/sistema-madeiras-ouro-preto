@@ -60,7 +60,7 @@ export const generateOrderPDF = async (order: Order, openPrint = false, client?:
     const pageWidth = doc.internal.pageSize.width;
     const pageHeight = doc.internal.pageSize.height;
 
-    const redColor = '#9b2b29';
+    const primaryColor = '#02904b';
     const grayColor = '#666666';
 
     const unitLabels: Record<string, string> = {
@@ -83,7 +83,7 @@ export const generateOrderPDF = async (order: Order, openPrint = false, client?:
     doc.restoreGraphicsState();
 
     // Header Background Bar
-    doc.setFillColor(redColor);
+    doc.setFillColor(primaryColor);
     doc.rect(0, 0, pageWidth, 45, 'F');
 
     // Load and Add Logo (Timeout 2s - garantindo não travar em produção)
@@ -177,9 +177,15 @@ export const generateOrderPDF = async (order: Order, openPrint = false, client?:
     doc.setFont('helvetica', 'normal');
     doc.text(order.paymentMethod || 'Não informada', 50, 91);
 
-    // Re-adjust startY for the table based on address height
-    const addressLines = splitAddress.length;
-    const tableStartY = 91 + (addressLines > 1 ? (addressLines * 4) : 4) + 2;
+    if (order.deliveryDate) {
+      doc.setFont('helvetica', 'bold');
+      doc.text("Data de Entrega:", 14, 96);
+      doc.setFont('helvetica', 'normal');
+      doc.text(new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('pt-BR'), 42, 96);
+    }
+
+    // Re-adjust startY for the table
+    const tableStartY = order.deliveryDate ? 102 : 95;
 
     const tableColumn = ["Descrição", "Qtd", "Comp.", "Larg.", "Benef.", "Un", "Vl. Unit.", "Total"];
     const tableRows: any[] = [];
@@ -207,7 +213,7 @@ export const generateOrderPDF = async (order: Order, openPrint = false, client?:
       head: [tableColumn],
       body: tableRows,
       theme: 'striped',
-      headStyles: { fillColor: redColor, textColor: 255, fontStyle: 'bold' },
+      headStyles: { fillColor: primaryColor, textColor: 255, fontStyle: 'bold' },
       styles: { fontSize: 9, cellPadding: 4 },
       columnStyles: {
         0: { cellWidth: 'auto' },
@@ -215,43 +221,51 @@ export const generateOrderPDF = async (order: Order, openPrint = false, client?:
       }
     });
 
-    const finalY = (doc as any).lastAutoTable.finalY + 10;
     const rightMargin = pageWidth - 14;
+    let yPos = (doc as any).lastAutoTable.finalY + 10;
 
     doc.setFontSize(10);
     doc.setTextColor(grayColor);
-    doc.text(`Subtotal dos Itens: R$ ${(order.subtotal || 0).toFixed(2)}`, rightMargin, finalY, { align: 'right' });
+    doc.text(`Subtotal dos Itens: R$ ${(order.subtotal || 0).toFixed(2)}`, rightMargin, yPos, { align: 'right' });
+    yPos += 6;
 
     if (order.globalDiscountAmount && order.globalDiscountAmount > 0) {
       const discountLabel = order.globalDiscountType === 'percent'
         ? `Desconto do Pedido (${order.globalDiscountValue}%):`
         : 'Desconto do Pedido:';
-      doc.text(`${discountLabel} - R$ ${order.globalDiscountAmount.toFixed(2)}`, rightMargin, finalY + 6, { align: 'right' });
+      doc.text(`${discountLabel} - R$ ${order.globalDiscountAmount.toFixed(2)}`, rightMargin, yPos, { align: 'right' });
+      yPos += 6;
+    }
+
+    if (order.shippingValue && order.shippingValue > 0) {
+      doc.text(`Frete: R$ ${Number(order.shippingValue).toFixed(2)}`, rightMargin, yPos, { align: 'right' });
+      yPos += 6;
     }
 
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(redColor);
-    doc.text(`Total Final: R$ ${(order.total || 0).toFixed(2)}`, rightMargin, finalY + 15, { align: 'right' });
+    doc.setTextColor(primaryColor);
+    doc.text(`Total Final: R$ ${(order.total || 0).toFixed(2)}`, rightMargin, yPos + 4, { align: 'right' });
+
+    const notesY = yPos + 15;
 
     if (order.customerNotes) {
       doc.setTextColor(0, 0, 0);
       doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');
-      doc.text("OBSERVAÇÕES:", 14, finalY + 25);
+      doc.text("OBSERVAÇÕES:", 14, notesY);
 
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
       const splitNotes = doc.splitTextToSize(order.customerNotes, pageWidth - 28);
-      doc.text(splitNotes, 14, finalY + 31);
+      doc.text(splitNotes, 14, notesY + 6);
     }
 
     // Signature Area
-    const signatureY = Math.min(pageHeight - 45, finalY + 50);
-    doc.setFontSize(9);
+    const signatureY = pageHeight - 40;
+    doc.setFontSize(10);
     doc.setTextColor(0, 0, 0);
-    doc.text("Assinatura do Entregador: ____________________________", 14, signatureY);
-    doc.text("Assinatura do Cliente: _______________________________", pageWidth - 14, signatureY, { align: 'right' });
+    doc.text("Assinatura do Cliente: __________________________________________", pageWidth / 2, signatureY, { align: 'center' });
 
     // Footer
     const footerY = pageHeight - 15;

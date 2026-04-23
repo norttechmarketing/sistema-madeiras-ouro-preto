@@ -140,7 +140,7 @@ const Clients: React.FC = () => {
             <input
               type="text"
               placeholder="Buscar por nome, CPF ou CNPJ..."
-              className="w-full pl-10 pr-4 py-2.5 border border-[#d9d7d8] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] transition-all font-medium text-sm"
+              className="w-full pl-10 pr-4 py-2.5 border border-[#d9d7d8] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] transition-all font-medium text-sm"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -232,7 +232,7 @@ const Clients: React.FC = () => {
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-slate-700 ml-1">Tipo</label>
                   <select
-                    className="w-full p-2.5 border border-[#d9d7d8] rounded-xl text-sm font-medium focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] outline-none"
+                    className="w-full p-2.5 border border-[#d9d7d8] rounded-xl text-sm font-medium focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none"
                     value={formData.type}
                     onChange={(e) => setFormData({ ...formData, type: e.target.value as 'PF' | 'PJ' })}
                   >
@@ -245,7 +245,7 @@ const Clients: React.FC = () => {
                   <input
                     type="text"
                     required
-                    className="w-full p-2.5 border border-[#d9d7d8] rounded-xl text-sm font-medium focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] outline-none"
+                    className="w-full p-2.5 border border-[#d9d7d8] rounded-xl text-sm font-medium focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none"
                     value={formData.document}
                     onChange={(e) => setFormData({ ...formData, document: e.target.value })}
                   />
@@ -257,7 +257,7 @@ const Clients: React.FC = () => {
                 <input
                   type="text"
                   required
-                  className="w-full p-2.5 border border-[#d9d7d8] rounded-xl text-sm font-medium focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] outline-none"
+                  className="w-full p-2.5 border border-[#d9d7d8] rounded-xl text-sm font-medium focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 />
@@ -269,7 +269,7 @@ const Clients: React.FC = () => {
                   <input
                     type="text"
                     required
-                    className="w-full p-2.5 border border-[#d9d7d8] rounded-xl text-sm font-medium focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] outline-none"
+                    className="w-full p-2.5 border border-[#d9d7d8] rounded-xl text-sm font-medium focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   />
@@ -280,7 +280,7 @@ const Clients: React.FC = () => {
                     <input
                       type="text"
                       placeholder="00000-000"
-                      className="flex-1 p-2.5 border border-[#d9d7d8] rounded-xl text-sm font-medium focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] outline-none"
+                      className="flex-1 p-2.5 border border-[#d9d7d8] rounded-xl text-sm font-medium focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none"
                       value={cep}
                       onChange={(e) => setCep(e.target.value)}
                       onBlur={handleCepLookup}
@@ -301,7 +301,7 @@ const Clients: React.FC = () => {
                 <input
                   type="text"
                   placeholder="Rua, número, bairro, cidade - UF"
-                  className="w-full p-2.5 border border-[#d9d7d8] rounded-xl text-sm font-medium focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] outline-none"
+                  className="w-full p-2.5 border border-[#d9d7d8] rounded-xl text-sm font-medium focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none"
                   value={formData.address}
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                 />
@@ -310,7 +310,7 @@ const Clients: React.FC = () => {
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-slate-700 ml-1">Observações</label>
                 <textarea
-                  className="w-full p-3 border border-[#d9d7d8] rounded-xl h-24 text-sm font-medium focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] outline-none resize-none"
+                  className="w-full p-3 border border-[#d9d7d8] rounded-xl h-24 text-sm font-medium focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none resize-none"
                   value={formData.internalNotes}
                   onChange={(e) => setFormData({ ...formData, internalNotes: e.target.value })}
                   placeholder="Informações adicionais sobre o cliente..."

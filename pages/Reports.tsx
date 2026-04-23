@@ -53,7 +53,7 @@ const Reports: React.FC = () => {
     <button
       onClick={() => setActiveTab(id)}
       className={`flex items-center gap-2 px-6 py-4 text-xs font-black uppercase tracking-widest transition-all border-b-2 ${activeTab === id
-        ? 'border-[#9b2b29] text-[#9b2b29] bg-[#9b2b29]/5'
+        ? 'border-[#02904b] text-[#02904b] bg-[#02904b]/5'
         : 'border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-50'
         }`}
     >
@@ -132,8 +132,8 @@ const Reports: React.FC = () => {
                       <AreaChart data={data?.monthlyVendas}>
                         <defs>
                           <linearGradient id="colorVendas" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#9b2b29" stopOpacity={0.1} />
-                            <stop offset="95%" stopColor="#9b2b29" stopOpacity={0} />
+                            <stop offset="5%" stopColor="#02904b" stopOpacity={0.1} />
+                            <stop offset="95%" stopColor="#02904b" stopOpacity={0} />
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -143,7 +143,7 @@ const Reports: React.FC = () => {
                           contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                           formatter={(v: any) => [`R$ ${v.toLocaleString('pt-BR')}`, 'Faturamento']}
                         />
-                        <Area type="monotone" dataKey="vendas" stroke="#9b2b29" fillOpacity={1} fill="url(#colorVendas)" strokeWidth={3} />
+                        <Area type="monotone" dataKey="vendas" stroke="#02904b" fillOpacity={1} fill="url(#colorVendas)" strokeWidth={3} />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
@@ -158,7 +158,7 @@ const Reports: React.FC = () => {
                         <YAxis fontSize={10} fontWeight="bold" stroke="#94a3b8" axisLine={false} tickLine={false} />
                         <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
                         <Legend iconType="circle" />
-                        <Bar dataKey="pedidos" fill="#9b2b29" radius={[4, 4, 0, 0]} name="Pedidos" />
+                        <Bar dataKey="pedidos" fill="#02904b" radius={[4, 4, 0, 0]} name="Pedidos" />
                         <Bar dataKey="orcamentos" fill="#d9d7d8" radius={[4, 4, 0, 0]} name="Orçamentos" />
                       </BarChart>
                     </ResponsiveContainer>
@@ -266,7 +266,7 @@ const Reports: React.FC = () => {
                         </div>
                         <div className="h-2 bg-slate-100 rounded-full overflow-hidden p-[1px] border border-slate-50">
                           <div
-                            className="h-full bg-[#9b2b29] rounded-full transition-all duration-1000"
+                            className="h-full bg-[#02904b] rounded-full transition-all duration-1000"
                             style={{ width: `${(p.total / (data.topProducts[0]?.total || 1)) * 100}%` }}
                           ></div>
                         </div>
@@ -297,7 +297,7 @@ const Reports: React.FC = () => {
                         <td className="px-8 py-6 font-bold text-slate-900 text-sm">{c.name}</td>
                         <td className="px-8 py-6 text-center text-slate-500 font-bold">{c.pedidos}</td>
                         <td className="px-8 py-6 text-center text-slate-500 font-bold text-sm">R$ {c.ticket.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                        <td className="px-8 py-6 text-right font-black text-[#9b2b29] text-sm">R$ {c.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        <td className="px-8 py-6 text-right font-black text-[#02904b] text-sm">R$ {c.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -318,7 +318,7 @@ const Reports: React.FC = () => {
                       <XAxis type="number" hide />
                       <YAxis dataKey="name" type="category" fontSize={10} fontWeight="bold" width={80} stroke="#94a3b8" axisLine={false} tickLine={false} />
                       <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                      <Bar dataKey="value" fill="#9b2b29" radius={[0, 4, 4, 0]} name="Pedidos" />
+                      <Bar dataKey="value" fill="#02904b" radius={[0, 4, 4, 0]} name="Pedidos" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>

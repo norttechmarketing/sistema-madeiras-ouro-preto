@@ -118,13 +118,13 @@ const AdminUsers: React.FC = () => {
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleRoleChange(u, 'sales')}
-                        className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${u.role === 'sales' ? 'bg-[#9b2b29] text-white border-[#9b2b29] shadow-sm' : 'bg-white text-slate-400 border-[#d9d7d8] hover:border-slate-300'}`}
+                        className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${u.role === 'sales' ? 'bg-[#02904b] text-white border-[#02904b] shadow-sm' : 'bg-white text-slate-400 border-[#d9d7d8] hover:border-slate-300'}`}
                       >
                         Vendedor
                       </button>
                       <button
                         onClick={() => handleRoleChange(u, 'admin')}
-                        className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${u.role === 'admin' ? 'bg-[#9b2b29] text-white border-[#9b2b29] shadow-sm' : 'bg-white text-slate-400 border-[#d9d7d8] hover:border-slate-300'}`}
+                        className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${u.role === 'admin' ? 'bg-[#02904b] text-white border-[#02904b] shadow-sm' : 'bg-white text-slate-400 border-[#d9d7d8] hover:border-slate-300'}`}
                       >
                         Admin
                       </button>

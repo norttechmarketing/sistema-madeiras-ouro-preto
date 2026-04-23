@@ -136,14 +136,14 @@ const Products: React.FC = () => {
             <input
               type="text"
               placeholder="Buscar por nome ou código..."
-              className="w-full pl-12 pr-4 py-2.5 bg-white border border-[#d9d7d8] rounded-xl focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] outline-none font-medium transition-all text-sm"
+              className="w-full pl-12 pr-4 py-2.5 bg-white border border-[#d9d7d8] rounded-xl focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none font-medium transition-all text-sm"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
           <div className="w-full md:w-64">
             <select
-              className="w-full p-2.5 bg-white border border-[#d9d7d8] rounded-xl font-bold text-[10px] uppercase tracking-widest outline-none focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] transition-all"
+              className="w-full p-2.5 bg-white border border-[#d9d7d8] rounded-xl font-bold text-[10px] uppercase tracking-widest outline-none focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] transition-all"
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
             >
@@ -215,7 +215,7 @@ const Products: React.FC = () => {
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Código</label>
                   <input
                     type="text" required
-                    className="w-full p-3 border border-[#d9d7d8] rounded-xl text-sm font-semibold focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] outline-none uppercase transition-all"
+                    className="w-full p-3 border border-[#d9d7d8] rounded-xl text-sm font-semibold focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none uppercase transition-all"
                     value={formData.code}
                     onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                   />
@@ -224,7 +224,7 @@ const Products: React.FC = () => {
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Categoria</label>
                   <select
                     required
-                    className="w-full p-3 border border-[#d9d7d8] rounded-xl text-sm font-semibold focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] outline-none transition-all appearance-none bg-white"
+                    className="w-full p-3 border border-[#d9d7d8] rounded-xl text-sm font-semibold focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none transition-all appearance-none bg-white"
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   >
@@ -262,7 +262,7 @@ const Products: React.FC = () => {
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Preço Bruto</label>
                   <input
                     type="number" step="0.01" min="0" required
-                    className="w-full p-3 border border-[#d9d7d8] rounded-xl text-sm font-semibold focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] outline-none transition-all"
+                    className="w-full p-3 border border-[#d9d7d8] rounded-xl text-sm font-semibold focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none transition-all"
                     value={formData.price_bruto}
                     onChange={(e) => setFormData({ ...formData, price_bruto: parseFloat(e.target.value), price: parseFloat(e.target.value) })}
                   />
@@ -271,7 +271,7 @@ const Products: React.FC = () => {
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Preço Beneficiado</label>
                   <input
                     type="number" step="0.01" min="0" required
-                    className="w-full p-3 border border-[#d9d7d8] rounded-xl text-sm font-semibold focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] outline-none transition-all"
+                    className="w-full p-3 border border-[#d9d7d8] rounded-xl text-sm font-semibold focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none transition-all"
                     value={formData.price_benef}
                     onChange={(e) => setFormData({ ...formData, price_benef: parseFloat(e.target.value) })}
                   />

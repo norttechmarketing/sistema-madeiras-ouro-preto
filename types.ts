@@ -60,6 +60,8 @@ export interface Order {
   internalNotes?: string;
   customerNotes?: string;
   paymentMethod?: string;
+  shippingValue?: number;
+  deliveryDate?: string;
   createdAt: string;
 }
 

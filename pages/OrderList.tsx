@@ -87,7 +87,7 @@ const OrderList: React.FC = () => {
               <input
                 type="text"
                 placeholder="Buscar por cliente, vendedor ou número..."
-                className="w-full pl-12 pr-4 py-2.5 bg-white border border-[#d9d7d8] rounded-xl focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] outline-none font-semibold text-sm transition-all"
+                className="w-full pl-12 pr-4 py-2.5 bg-white border border-[#d9d7d8] rounded-xl focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none font-semibold text-sm transition-all"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -96,7 +96,7 @@ const OrderList: React.FC = () => {
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Filtro:</span>
               <select
-                className="bg-white border border-[#d9d7d8] rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] transition-all"
+                className="bg-white border border-[#d9d7d8] rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] transition-all"
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value as any)}
               >

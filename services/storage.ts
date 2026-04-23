@@ -296,6 +296,8 @@ export const storage = {
         internalNotes: row.internal_notes,
         customerNotes: row.customer_notes,
         paymentMethod: row.payment_method,
+        shippingValue: Number(row.shipping_value || 0),
+        deliveryDate: row.delivery_date,
         createdAt: typeof row.created_at === 'string' ? row.created_at : new Date(row.created_at || Date.now()).toISOString(),
         items: (row.items || []).map((item: any) => ({
           id: item.id,
@@ -333,23 +335,6 @@ export const storage = {
         const sellerId = order.sellerId || user.id;
         const sellerName = order.sellerName || user.name;
 
-        // Enforce Seller ID integrity
-        if (!sellerId) {
-          throw new Error("Sessão expirada ou sem vendedor vinculado. Por favor, faça login novamente.");
-        }
-
-        // Ensure seller exists in 'sellers' table before saving order
-        const sellerCheckResult: any = await withTimeout(() => client.from('sellers').select('id').eq('id', sellerId).single(), 20000, { retry: true, silent: true });
-        const existingSeller = sellerCheckResult?.data;
-
-        if (!existingSeller) {
-          await withTimeout(() => client.from('sellers').insert({
-            id: sellerId,
-            name: sellerName || 'Vendedor',
-            is_active: true
-          }), 20000, { retry: true });
-        }
-
         const headerPayload = {
           id: orderId,
           client_id: order.clientId,
@@ -368,6 +353,8 @@ export const storage = {
           internal_notes: order.internalNotes,
           customer_notes: order.customerNotes,
           payment_method: order.paymentMethod,
+          shipping_value: order.shippingValue,
+          delivery_date: order.deliveryDate,
           created_at: new Date().toISOString()
         };
 

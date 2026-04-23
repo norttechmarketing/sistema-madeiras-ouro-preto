@@ -18,7 +18,7 @@ try {
   console.error("Failed to render the app:", error);
   rootElement.innerHTML = `
     <div style="padding: 20px; font-family: sans-serif; text-align: center;">
-      <h1 style="color: #9b2b29;">Erro Crítico de Inicialização</h1>
+      <h1 style="color: #02904b;">Erro Crítico de Inicialização</h1>
       <p>Não foi possível carregar o sistema. Verifique o console do navegador para mais detalhes.</p>
     </div>
   `;

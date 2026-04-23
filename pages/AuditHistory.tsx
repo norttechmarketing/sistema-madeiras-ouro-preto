@@ -84,7 +84,7 @@ const AuditHistory: React.FC = () => {
                     <div className="flex items-center gap-2">
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Período:</span>
                         <select
-                            className="bg-white border border-[#d9d7d8] rounded-xl px-4 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] transition-all"
+                            className="bg-white border border-[#d9d7d8] rounded-xl px-4 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] transition-all"
                             value={filters.period}
                             onChange={(e) => setFilters({ ...filters, period: e.target.value })}
                         >
@@ -98,7 +98,7 @@ const AuditHistory: React.FC = () => {
                     <div className="flex items-center gap-2">
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tabela:</span>
                         <select
-                            className="bg-white border border-[#d9d7d8] rounded-xl px-4 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] transition-all"
+                            className="bg-white border border-[#d9d7d8] rounded-xl px-4 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] transition-all"
                             value={filters.table}
                             onChange={(e) => setFilters({ ...filters, table: e.target.value })}
                         >
@@ -113,7 +113,7 @@ const AuditHistory: React.FC = () => {
                     <div className="flex items-center gap-2">
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ação:</span>
                         <select
-                            className="bg-white border border-[#d9d7d8] rounded-xl px-4 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] transition-all"
+                            className="bg-white border border-[#d9d7d8] rounded-xl px-4 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] transition-all"
                             value={filters.action}
                             onChange={(e) => setFilters({ ...filters, action: e.target.value })}
                         >

@@ -31,8 +31,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
         to={to}
         onClick={() => setIsSidebarOpen(false)}
         className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 mb-1 active:scale-[0.98] ${isActive
-          ? 'bg-[#9b2b29] text-white shadow-lg shadow-[#9b2b29]/10'
-          : 'text-slate-500 hover:bg-slate-50 hover:text-[#9b2b29] font-medium'
+          ? 'bg-[#02904b] text-white shadow-lg shadow-[#02904b]/10'
+          : 'text-slate-500 hover:bg-slate-50 hover:text-[#02904b] font-medium'
           }`}
       >
         <Icon size={18} className="shrink-0" />
@@ -42,7 +42,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-50 overflow-x-hidden selection:bg-[#9b2b29]/10 selection:text-[#9b2b29]">
+    <div className="flex flex-col min-h-screen bg-slate-50 overflow-x-hidden selection:bg-[#02904b]/10 selection:text-[#02904b]">
       {/* Mobile Topbar */}
       <div className="lg:hidden bg-white/80 backdrop-blur-md px-6 py-4 shadow-sm flex justify-between items-center sticky top-0 z-50 border-b border-[#d9d7d8]">
         <img src="https://nyltechsite.com.br/wp-content/uploads/2026/01/Logo.png" alt="Logo" style={{ height: '32px' }} />
@@ -87,16 +87,16 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
 
           <div className="p-6">
             <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-[#d9d7d8] group">
-              <div className="w-10 h-10 shrink-0 rounded-xl bg-[#9b2b29] text-white flex items-center justify-center font-bold text-sm">
+              <div className="w-10 h-10 shrink-0 rounded-xl bg-[#02904b] text-white flex items-center justify-center font-bold text-sm">
                 {user.name.charAt(0)}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-black text-slate-900 truncate uppercase tracking-tight">{user.name}</p>
-                <p className="text-[9px] text-[#9b2b29] uppercase font-black tracking-widest leading-none mt-1">{user.role}</p>
+                <p className="text-[9px] text-[#02904b] uppercase font-black tracking-widest leading-none mt-1">{user.role}</p>
               </div>
               <button
                 onClick={onLogout}
-                className="text-slate-300 hover:text-[#9b2b29] p-2 hover:bg-white rounded-lg transition-all"
+                className="text-slate-300 hover:text-[#02904b] p-2 hover:bg-white rounded-lg transition-all"
                 title="Sair"
               >
                 <LogOut size={16} />
@@ -132,7 +132,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                   href="https://www.norttech.com.br"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-slate-600 font-bold hover:text-[#9b2b29] transition-colors"
+                  className="text-slate-600 font-bold hover:text-[#02904b] transition-colors"
                 >
                   NortTech Marketing
                 </a>

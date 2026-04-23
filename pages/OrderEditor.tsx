@@ -44,6 +44,7 @@ const OrderEditor: React.FC = () => {
   const [vendedores, setVendedores] = useState<Seller[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
   const [isClientsModalOpen, setIsClientsModalOpen] = useState(false);
 
   // Editor State
@@ -88,53 +89,71 @@ const OrderEditor: React.FC = () => {
 
   const [globalDiscountType, setGlobalDiscountType] = useState<'percent' | 'fixed'>('fixed');
   const [globalDiscountValue, setGlobalDiscountValue] = useState<number | string>('');
+  const [shippingValue, setShippingValue] = useState<number | string>('');
+  const [deliveryDate, setDeliveryDate] = useState<string>('');
+
+
+  // Funções de Carga de Dados
+  const loadBaseData = async () => {
+    if (clients.length > 0 && products.length > 0 && vendedores.length > 0) return;
+    try {
+      const [c, p, s] = await Promise.all([
+        storage.getClients(),
+        storage.getProducts(),
+        storage.getSellers(true)
+      ]);
+      setClients(c);
+      setProducts(p);
+      setVendedores(s);
+    } catch (err) {
+      console.error("Erro ao carregar dados base:", err);
+    }
+  };
+
+  const loadOrderData = async (orderId: string) => {
+    try {
+      const ordersData = await storage.getOrders();
+      setAllOrders(ordersData);
+      
+      const existing = ordersData.find(o => o.id === orderId);
+      if (existing) {
+        setOrderType(existing.type);
+        setOrderStatus(existing.status);
+        setOrderItems(existing.items || []);
+        setInternalNotes(existing.internalNotes || '');
+        setCustomerNotes(existing.customerNotes || '');
+        setPaymentMethod(existing.paymentMethod || '');
+        setCreatedAt(existing.createdAt);
+        setSelectedSellerId(existing.sellerId || '');
+        setGlobalDiscountType(existing.globalDiscountType || 'fixed');
+        setGlobalDiscountValue(existing.globalDiscountValue || '');
+        setShippingValue(existing.shippingValue || '');
+        setDeliveryDate(existing.deliveryDate || '');
+
+        // Use o state local de clients se já tiver, senão busque
+        let clientsList = clients;
+        if (clientsList.length === 0) clientsList = await storage.getClients();
+        
+        const client = clientsList.find(c => c.id === existing.clientId);
+        if (client) setSelectedClient(client);
+      }
+    } catch (err) {
+      console.error("Erro ao carregar pedido:", err);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [clientsData, productsData, ordersData, sellersData] = await Promise.all([
-          storage.getClients(),
-          storage.getProducts(),
-          storage.getOrders(),
-          storage.getSellers(true)
-        ]);
-
-        setClients(clientsData);
-        setProducts(productsData);
-        setVendedores(sellersData);
-        setAllOrders(ordersData);
-
-        if (id && id !== 'new') {
-          const existing = ordersData.find(o => o.id === id);
-          if (existing) {
-            setOrderType(existing.type);
-            setOrderStatus(existing.status);
-            setOrderItems(existing.items || []);
-            setInternalNotes(existing.internalNotes || '');
-            setCustomerNotes(existing.customerNotes || '');
-            setPaymentMethod(existing.paymentMethod || '');
-            setCreatedAt(existing.createdAt);
-            setSelectedSellerId(existing.sellerId || '');
-            setGlobalDiscountType(existing.globalDiscountType || 'fixed');
-            setGlobalDiscountValue(existing.globalDiscountValue || '');
-
-            const client = clientsData.find(c => c.id === existing.clientId);
-            if (client) setSelectedClient(client);
-          }
-        } else {
-          const currentUser = await storage.getCurrentUser();
-          if (currentUser) setSelectedSellerId(currentUser.id);
-
-          if (typeParam === 'Orçamento' || typeParam === 'Pedido') {
-            setOrderType(typeParam);
-          }
-        }
-      } catch (error) {
-        console.error("Erro ao carregar dados iniciais:", error);
-        alert("Erro ao carregar dados. Verifique sua conexão.");
+    const init = async () => {
+      await loadBaseData();
+      if (id && id !== 'new') {
+        await loadOrderData(id);
+      } else {
+        const currentUser = await storage.getCurrentUser();
+        if (currentUser && !selectedSellerId) setSelectedSellerId(currentUser.id);
+        if (typeParam === 'Orçamento' || typeParam === 'Pedido') setOrderType(typeParam);
       }
     };
-    fetchData();
+    init();
   }, [id]);
 
   const getItemBaseTotal = (item: Partial<OrderItem>) => {
@@ -165,7 +184,7 @@ const OrderEditor: React.FC = () => {
   const globalDiscountAmount = globalDiscountType === 'percent'
     ? subtotalItems * (Number(globalDiscountValue || 0) / 100)
     : Number(globalDiscountValue || 0);
-  const total = Math.max(0, subtotalItems - globalDiscountAmount);
+  const total = Math.max(0, subtotalItems - globalDiscountAmount + Number(shippingValue || 0));
 
   const addItem = () => {
     if (!newItem.description) return;
@@ -273,6 +292,8 @@ const OrderEditor: React.FC = () => {
       globalDiscountType: globalDiscountType,
       globalDiscountValue: Number(globalDiscountValue || 0),
       globalDiscountAmount: globalDiscountAmount,
+      shippingValue: Number(shippingValue || 0),
+      deliveryDate: deliveryDate || null,
       total: total,
       internalNotes,
       customerNotes,
@@ -281,19 +302,14 @@ const OrderEditor: React.FC = () => {
     };
 
     try {
-      let newOrders = [...allOrders];
-      if (id === 'new') {
-        newOrders.push(orderData);
-      } else {
-        newOrders = newOrders.map(o => o.id === id ? orderData : o);
-      }
-
-      await storage.saveOrders(newOrders);
-      setAllOrders(newOrders);
-
+      // Salva no banco
+      await storage.saveOrders([orderData]);
+      
       if (!silent) {
         alert('Salvo com sucesso!');
-        if (id === 'new') navigate(`/orders/${orderData.id}`);
+        if (id === 'new') {
+          navigate(`/orders/${orderData.id}`);
+        }
       }
       return orderData;
     } catch (error: any) {
@@ -306,14 +322,18 @@ const OrderEditor: React.FC = () => {
   };
 
   const handleWhatsApp = async () => {
-    const order = await saveOrder(true);
-    if (!order) return;
+    if (isSendingWhatsApp) return;
+    setIsSendingWhatsApp(true);
 
-    const itemsList = order.items.map(i =>
-      `${i.quantity} ${i.unit} - ${i.description} (R$ ${i.total.toFixed(2)})`
-    ).join('\n');
+    try {
+      const order = await saveOrder(true);
+      if (!order) return;
 
-    const msg = `Olá! Segue seu orçamento da Madeiras Ouro Preto:
+      const itemsList = order.items.map(i =>
+        `${i.quantity} ${i.unit} - ${i.description} (R$ ${i.total.toFixed(2)})`
+      ).join('\n');
+
+      const msg = `Olá! Segue seu orçamento da Madeiras Ouro Preto:
 Cliente: ${order.clientName}
 Itens:
 ${itemsList}
@@ -321,7 +341,12 @@ ${itemsList}
 Total: R$ ${order.total.toFixed(2)}
 Posso te ajudar em mais algo?`;
 
-    window.open(`https://wa.me/${COMPANY_INFO.whatsapp}?text=${encodeURIComponent(msg)}`, '_blank');
+      window.open(`https://wa.me/${COMPANY_INFO.whatsapp}?text=${encodeURIComponent(msg)}`, '_blank');
+    } catch (error) {
+      console.error("WhatsApp error:", error);
+    } finally {
+      setIsSendingWhatsApp(false);
+    }
   };
 
   const handleDeleteOrder = async () => {
@@ -340,52 +365,49 @@ Posso te ajudar em mais algo?`;
     }
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     if (isExporting) return;
     setIsExporting(true);
 
     try {
-      const seller = vendedores.find(v => v.id === selectedSellerId);
-
-      // Constrói objeto de pedido diretamente do state (INSTANTÂNEO)
-      const mockOrder: any = {
-        id: id === 'new' ? 'PREVIA' : id!,
-        clientId: selectedClient?.id || '',
-        clientName: selectedClient?.name || 'Cliente',
-        sellerId: selectedSellerId,
-        sellerName: seller?.name || 'Vendedor',
-        date: new Date().toISOString(),
-        status: orderStatus,
-        type: orderType,
-        items: orderItems,
-        subtotal: subtotalItems,
-        total: total,
-        paymentMethod: paymentMethod === 'Outros' ? otherPaymentMethod : paymentMethod,
-        customerNotes: customerNotes,
-        globalDiscountAmount: Number(globalDiscountAmount || 0),
-        globalDiscountType: globalDiscountType,
-        globalDiscountValue: Number(globalDiscountValue || 0),
-        createdAt: createdAt || new Date().toISOString()
-      };
-
-      // Chama gerador (PDF é gerado imediatamente em aba separada ou download)
-      generateOrderPDF(mockOrder, true, selectedClient || undefined)
-        .catch(err => {
-          console.error("PDF Generation Error:", err);
-          alert("Não foi possível gerar o PDF. Verifique se há muito conteúdo.");
-        })
-        .finally(() => {
-          setIsExporting(false);
-        });
-
-      // Segundo plano: Tentar salvar o pedido sem bloquear a UI se for novo
+      // Se for novo, salva antes para garantir ID e persistência, mas sem bloquear com alert
+      let currentOrder: any = null;
       if (id === 'new') {
-        saveOrder(true).catch(e => console.warn("Auto-save failed in background", e));
+        currentOrder = await saveOrder(true);
+      } else {
+        const seller = vendedores.find(v => v.id === selectedSellerId);
+        currentOrder = {
+          id: id!,
+          clientId: selectedClient?.id || '',
+          clientName: selectedClient?.name || 'Cliente',
+          sellerId: selectedSellerId,
+          sellerName: seller?.name || 'Vendedor',
+          date: new Date().toISOString(),
+          status: orderStatus,
+          type: orderType,
+          items: orderItems,
+          subtotal: subtotalItems,
+          shippingValue: Number(shippingValue || 0),
+          deliveryDate: deliveryDate || null,
+          total: total,
+          paymentMethod: paymentMethod === 'Outros' ? otherPaymentMethod : paymentMethod,
+          customerNotes: customerNotes,
+          globalDiscountAmount: Number(globalDiscountAmount || 0),
+          globalDiscountType: globalDiscountType,
+          globalDiscountValue: Number(globalDiscountValue || 0),
+          createdAt: createdAt || new Date().toISOString()
+        };
       }
 
+      if (!currentOrder && id === 'new') {
+        throw new Error("Não foi possível salvar o pedido antes de exportar.");
+      }
+
+      await generateOrderPDF(currentOrder, true, selectedClient || undefined);
     } catch (error: any) {
-      console.error("Critical Export Component error:", error);
-      alert(`Erro crítico na UI ao gerar PDF: ${error.message}`);
+      console.error("Export error:", error);
+      alert(`Erro ao exportar PDF: ${error.message}`);
+    } finally {
       setIsExporting(false);
     }
   };
@@ -443,7 +465,7 @@ Posso te ajudar em mais algo?`;
           {orderType === 'Orçamento' && id !== 'new' && (
             <PrimaryButton
               onClick={() => { setOrderType('Pedido'); setOrderStatus('Rascunho'); }}
-              className="!bg-[#9b2b29]"
+              className="!bg-[#02904b]"
             >
               <CheckCircle size={16} /> <span className="whitespace-nowrap">Converter em Pedido</span>
             </PrimaryButton>
@@ -472,7 +494,7 @@ Posso te ajudar em mais algo?`;
                 <input
                   type="text"
                   placeholder="Buscar cliente..."
-                  className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-[#d9d7d8] rounded-xl focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] outline-none font-bold text-sm transition-all"
+                  className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-[#d9d7d8] rounded-xl focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none font-bold text-sm transition-all"
                   value={clientSearch}
                   onChange={(e) => {
                     setClientSearch(e.target.value);
@@ -511,7 +533,7 @@ Posso te ajudar em mais algo?`;
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Vendedor Responsável</label>
                 <div className="relative">
                   <select
-                    className="w-full appearance-none p-2.5 bg-slate-50 border border-[#d9d7d8] rounded-xl font-bold text-sm outline-none focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] transition-all"
+                    className="w-full appearance-none p-2.5 bg-slate-50 border border-[#d9d7d8] rounded-xl font-bold text-sm outline-none focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] transition-all"
                     value={selectedSellerId}
                     onChange={(e) => setSelectedSellerId(e.target.value)}
                   >
@@ -526,7 +548,7 @@ Posso te ajudar em mais algo?`;
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Observações no PDF</label>
                 <textarea
-                  className="w-full p-3.5 bg-slate-50 border border-[#d9d7d8] rounded-xl text-sm h-32 resize-none outline-none focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] font-medium transition-all"
+                  className="w-full p-3.5 bg-slate-50 border border-[#d9d7d8] rounded-xl text-sm h-32 resize-none outline-none focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] font-medium transition-all"
                   value={customerNotes}
                   onChange={e => setCustomerNotes(e.target.value)}
                   placeholder="Ex: Entrega inclusa, prazo de 5 dias úteis..."
@@ -537,7 +559,7 @@ Posso te ajudar em mais algo?`;
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Forma de Pagamento</label>
                 <div className="relative">
                   <select
-                    className="w-full appearance-none p-2.5 bg-slate-50 border border-[#d9d7d8] rounded-xl font-bold text-sm outline-none focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] transition-all"
+                    className="w-full appearance-none p-2.5 bg-slate-50 border border-[#d9d7d8] rounded-xl font-bold text-sm outline-none focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] transition-all"
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value)}
                   >
@@ -555,12 +577,22 @@ Posso te ajudar em mais algo?`;
                 {paymentMethod === 'Outros' && (
                   <input
                     type="text"
-                    className="w-full mt-2 p-2.5 bg-slate-50 border border-[#d9d7d8] rounded-xl font-bold text-sm outline-none focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] transition-all"
+                    className="w-full mt-2 p-2.5 bg-slate-50 border border-[#d9d7d8] rounded-xl font-bold text-sm outline-none focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] transition-all"
                     placeholder="Especifique..."
                     value={otherPaymentMethod}
                     onChange={(e) => setOtherPaymentMethod(e.target.value)}
                   />
                 )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Data de Entrega</label>
+                <input
+                  type="date"
+                  className="w-full p-2.5 bg-slate-50 border border-[#d9d7d8] rounded-xl font-bold text-sm outline-none focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] transition-all"
+                  value={deliveryDate}
+                  onChange={(e) => setDeliveryDate(e.target.value)}
+                />
               </div>
             </div>
           </Card>
@@ -576,7 +608,7 @@ Posso te ajudar em mais algo?`;
                   <div className="relative">
                     <input
                       type="text"
-                      className="w-full h-[48px] pl-4 pr-10 py-2.5 bg-white border border-[#d9d7d8] rounded-xl text-[17px] font-bold outline-none focus:ring-2 focus:ring-[#9b2b29] focus:border-[#9b2b29] focus:bg-white transition-all"
+                      className="w-full h-[48px] pl-4 pr-10 py-2.5 bg-white border border-[#d9d7d8] rounded-xl text-[17px] font-bold outline-none focus:ring-2 focus:ring-[#02904b] focus:border-[#02904b] focus:bg-white transition-all"
                       placeholder="Buscar catálogo..."
                       value={productSearch || newItem.description}
                       onChange={(e) => {
@@ -606,7 +638,7 @@ Posso te ajudar em mais algo?`;
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Qtd</label>
                   <input
                     type="number"
-                    className="w-full h-[48px] p-3 bg-white border border-[#d9d7d8] rounded-xl text-[17px] font-bold outline-none focus:ring-2 focus:ring-[#9b2b29] focus:border-[#9b2b29] focus:bg-white transition-all text-right"
+                    className="w-full h-[48px] p-3 bg-white border border-[#d9d7d8] rounded-xl text-[17px] font-bold outline-none focus:ring-2 focus:ring-[#02904b] focus:border-[#02904b] focus:bg-white transition-all text-right"
                     placeholder="0,00"
                     step={newItem.unit === 'un' ? '1' : '0.01'}
                     min="0.01"
@@ -620,7 +652,7 @@ Posso te ajudar em mais algo?`;
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Comp.</label>
                     <input
                       type="number"
-                      className="w-full h-[48px] p-3 bg-white border border-[#d9d7d8] rounded-xl text-[17px] font-bold outline-none focus:ring-2 focus:ring-[#9b2b29] focus:border-[#9b2b29] focus:bg-white transition-all text-right"
+                      className="w-full h-[48px] p-3 bg-white border border-[#d9d7d8] rounded-xl text-[17px] font-bold outline-none focus:ring-2 focus:ring-[#02904b] focus:border-[#02904b] focus:bg-white transition-all text-right"
                       placeholder="0,00"
                       step="0.01"
                       min="0.01"
@@ -635,7 +667,7 @@ Posso te ajudar em mais algo?`;
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">LARG. (cm)</label>
                     <input
                       type="number"
-                      className="w-full h-[48px] p-3 bg-white border border-[#d9d7d8] rounded-xl text-[17px] font-bold outline-none focus:ring-2 focus:ring-[#9b2b29] focus:border-[#9b2b29] focus:bg-white transition-all text-right"
+                      className="w-full h-[48px] p-3 bg-white border border-[#d9d7d8] rounded-xl text-[17px] font-bold outline-none focus:ring-2 focus:ring-[#02904b] focus:border-[#02904b] focus:bg-white transition-all text-right"
                       placeholder="ex: 20 = 20cm"
                       step="0.01"
                       min="0"
@@ -650,7 +682,7 @@ Posso te ajudar em mais algo?`;
                   <div className="flex justify-center items-center h-[48px] bg-white border border-[#d9d7d8] rounded-xl">
                     <input
                       type="checkbox"
-                      className="w-5 h-5 rounded border-gray-300 text-[#9b2b29] focus:ring-[#9b2b29] cursor-pointer"
+                      className="w-5 h-5 rounded border-gray-300 text-[#02904b] focus:ring-[#02904b] cursor-pointer"
                       checked={newItem.isBeneficiado}
                       onChange={e => {
                         const isChecked = e.target.checked;
@@ -718,7 +750,7 @@ Posso te ajudar em mais algo?`;
                         <td className="px-6 py-4">
                           <input
                             type="number"
-                            className="w-full h-[48px] p-3 bg-slate-50 border border-slate-100 rounded-xl text-[17px] font-bold text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-[#9b2b29] transition-all text-right"
+                            className="w-full h-[48px] p-3 bg-slate-50 border border-slate-100 rounded-xl text-[17px] font-bold text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-[#02904b] transition-all text-right"
                             step={item.unit === 'un' ? '1' : '0.01'}
                             value={item.quantity || ''}
                             onChange={(e) => updateItem(item.id, 'quantity', e.target.value)}
@@ -728,7 +760,7 @@ Posso te ajudar em mais algo?`;
                           {item.unit === 'ML' || item.unit === 'm2' ? (
                             <input
                               type="number"
-                              className="w-full h-[48px] p-3 bg-slate-50 border border-slate-100 rounded-xl text-[17px] font-bold text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-[#9b2b29] transition-all text-right"
+                              className="w-full h-[48px] p-3 bg-slate-50 border border-slate-100 rounded-xl text-[17px] font-bold text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-[#02904b] transition-all text-right"
                               step="0.01"
                               value={item.comprimento || ''}
                               onChange={(e) => updateItem(item.id, 'comprimento', e.target.value)}
@@ -739,7 +771,7 @@ Posso te ajudar em mais algo?`;
                           {item.unit === 'm2' ? (
                             <input
                               type="number"
-                              className="w-full h-[48px] p-3 bg-slate-50 border border-slate-100 rounded-xl text-[17px] font-bold text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-[#9b2b29] transition-all text-right"
+                              className="w-full h-[48px] p-3 bg-slate-50 border border-slate-100 rounded-xl text-[17px] font-bold text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-[#02904b] transition-all text-right"
                               step="0.01"
                               value={item.largura || ''}
                               onChange={(e) => updateItem(item.id, 'largura', e.target.value)}
@@ -750,7 +782,7 @@ Posso te ajudar em mais algo?`;
                           <div className="flex justify-center items-center">
                             <input
                               type="checkbox"
-                              className="w-6 h-6 rounded border-gray-300 text-[#9b2b29] focus:ring-[#9b2b29]"
+                              className="w-6 h-6 rounded border-gray-300 text-[#02904b] focus:ring-[#02904b]"
                               checked={item.isBeneficiado}
                               onChange={(e) => {
                                 const isChecked = e.target.checked;
@@ -788,7 +820,7 @@ Posso te ajudar em mais algo?`;
                           <div className="flex items-center gap-1">
                             <input
                               type="number"
-                              className="w-full h-[48px] p-3 bg-slate-50 border border-slate-100 rounded-xl text-[17px] font-bold text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-[#9b2b29] transition-all text-right"
+                              className="w-full h-[48px] p-3 bg-slate-50 border border-slate-100 rounded-xl text-[17px] font-bold text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-[#02904b] transition-all text-right"
                               value={item.discountValue || ''}
                               onChange={(e) => updateItem(item.id, 'discountValue', e.target.value)}
                             />
@@ -840,7 +872,7 @@ Posso te ajudar em mais algo?`;
                   <input
                     type="number"
                     placeholder="0,00"
-                    className="w-full h-[40px] px-3 bg-slate-50 border border-slate-100 rounded-xl text-right font-bold text-red-500 outline-none focus:ring-2 focus:ring-[#9b2b29] transition-all"
+                    className="w-full h-[40px] px-3 bg-slate-50 border border-slate-100 rounded-xl text-right font-bold text-red-500 outline-none focus:ring-2 focus:ring-[#02904b] transition-all"
                     value={globalDiscountValue}
                     onChange={(e) => setGlobalDiscountValue(e.target.value)}
                   />
@@ -849,6 +881,20 @@ Posso te ajudar em mais algo?`;
                       - R$ {globalDiscountAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </div>
                   )}
+                </div>
+
+                <div className="flex flex-col w-full max-w-[320px] p-4 bg-white rounded-2xl border border-slate-100 shadow-sm gap-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Frete:</span>
+                    <span className="px-2 py-1 bg-slate-100 rounded-lg text-[10px] font-black text-slate-600">R$</span>
+                  </div>
+                  <input
+                    type="number"
+                    placeholder="0,00"
+                    className="w-full h-[40px] px-3 bg-slate-50 border border-slate-100 rounded-xl text-right font-bold text-green-600 outline-none focus:ring-2 focus:ring-[#02904b] transition-all"
+                    value={shippingValue}
+                    onChange={(e) => setShippingValue(e.target.value)}
+                  />
                 </div>
 
                 <div className="flex justify-between w-full max-w-[320px] text-3xl font-bold text-slate-900 mt-4 pt-4 border-t-2 border-dashed border-slate-200 tabular-nums">
@@ -877,14 +923,15 @@ Posso te ajudar em mais algo?`;
             </button>
             <button
               onClick={handleWhatsApp}
-              disabled={isSaving}
+              disabled={isSendingWhatsApp}
               className="flex-1 sm:flex-none min-w-[130px] bg-green-500 text-white px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-green-600 transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-green-100 disabled:opacity-50"
             >
-              <Send size={18} /> <span>WhatsApp</span>
+              {isSendingWhatsApp ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <Send size={18} />}
+              <span>{isSendingWhatsApp ? 'Enviando...' : 'WhatsApp'}</span>
             </button>
             <PrimaryButton
               onClick={handlePrint}
-              disabled={isSaving || isExporting}
+              disabled={isExporting}
               className="flex-1 sm:flex-none min-w-[150px] shadow-lg shadow-slate-900/20"
             >
               {isExporting ? (

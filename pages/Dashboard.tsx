@@ -17,7 +17,7 @@ import {
   ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend, AreaChart, Area
 } from 'recharts';
 
-const COLORS = ['#9b2b29', '#d9d7d8', '#000000', '#475569', '#94a3b8'];
+const COLORS = ['#02904b', '#d9d7d8', '#000000', '#475569', '#94a3b8'];
 
 const Dashboard: React.FC = () => {
   const [data, setData] = useState<any>(null);
@@ -108,7 +108,7 @@ const Dashboard: React.FC = () => {
 
       {/* Quick Actions - Novo Orçamento e Novo Pedido */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 no-print">
-        <Link to="/orders/new?type=Orçamento" className="bg-[#9b2b29] hover:bg-[#852523] transition-all rounded-2xl p-8 shadow-md text-white flex flex-col items-center justify-center group cursor-pointer active:scale-[0.98] border border-transparent overflow-hidden relative">
+        <Link to="/orders/new?type=Orçamento" className="bg-[#02904b] hover:bg-[#017a3f] transition-all rounded-2xl p-8 shadow-md text-white flex flex-col items-center justify-center group cursor-pointer active:scale-[0.98] border border-transparent overflow-hidden relative">
           <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-150 transition-transform duration-500">
             <FilePlus size={120} />
           </div>
@@ -120,7 +120,7 @@ const Dashboard: React.FC = () => {
           <p className="text-xs opacity-70 mt-1 flex items-center gap-1 font-medium italic relative z-10">Orçamento Rápido. <ArrowRight size={12} /></p>
         </Link>
 
-        <Link to="/orders/new?type=Pedido" className="bg-[#9b2b29] hover:bg-[#852523] transition-all rounded-2xl p-8 shadow-md text-white flex flex-col items-center justify-center group cursor-pointer active:scale-[0.98] border border-transparent overflow-hidden relative">
+        <Link to="/orders/new?type=Pedido" className="bg-[#02904b] hover:bg-[#017a3f] transition-all rounded-2xl p-8 shadow-md text-white flex flex-col items-center justify-center group cursor-pointer active:scale-[0.98] border border-transparent overflow-hidden relative">
           <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-150 transition-transform duration-500">
             <CheckCircle size={120} />
           </div>
@@ -136,13 +136,13 @@ const Dashboard: React.FC = () => {
       {/* Shortcuts grid - Base de Clientes e Curva de Produtos */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 no-print">
         <Link to="/clients" className="group">
-          <CardUI className="hover:border-[#9b2b29] transition-all group overflow-hidden relative active:scale-[0.98]">
+          <CardUI className="hover:border-[#02904b] transition-all group overflow-hidden relative active:scale-[0.98]">
             <div className="flex items-center gap-4 relative z-10">
-              <div className="p-4 bg-slate-50 rounded-xl group-hover:bg-[#9b2b29] group-hover:text-white transition-all">
+              <div className="p-4 bg-slate-50 rounded-xl group-hover:bg-[#02904b] group-hover:text-white transition-all">
                 <Users size={32} />
               </div>
               <div className="min-w-0">
-                <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#9b2b29] transition-colors truncate">Gestão de Clientes</h3>
+                <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#02904b] transition-colors truncate">Gestão de Clientes</h3>
                 <p className="text-sm text-slate-500 truncate">Gerencie sua base de clientes.</p>
               </div>
             </div>
@@ -150,13 +150,13 @@ const Dashboard: React.FC = () => {
         </Link>
 
         <Link to="/products" className="group">
-          <CardUI className="hover:border-[#9b2b29] transition-all group overflow-hidden relative active:scale-[0.98]">
+          <CardUI className="hover:border-[#02904b] transition-all group overflow-hidden relative active:scale-[0.98]">
             <div className="flex items-center gap-4 relative z-10">
-              <div className="p-4 bg-slate-50 rounded-xl group-hover:bg-[#9b2b29] group-hover:text-white transition-all">
+              <div className="p-4 bg-slate-50 rounded-xl group-hover:bg-[#02904b] group-hover:text-white transition-all">
                 <Package size={32} />
               </div>
               <div className="min-w-0">
-                <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#9b2b29] transition-colors truncate">Gestão de Produtos</h3>
+                <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#02904b] transition-colors truncate">Gestão de Produtos</h3>
                 <p className="text-sm text-slate-500 truncate">Gestão completa dos produtos.</p>
               </div>
             </div>
@@ -176,7 +176,7 @@ const Dashboard: React.FC = () => {
           title="Pedidos:"
           value={isLoading ? "..." : data?.kpis.orderCount}
           icon={CheckCircle}
-          colorClass="bg-[#9b2b29]/5 text-[#9b2b29]"
+          colorClass="bg-[#02904b]/5 text-[#02904b]"
           subtitle="Quantidade no período."
         />
         <KPICard
@@ -208,7 +208,7 @@ const Dashboard: React.FC = () => {
                   contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                   formatter={(v: any) => [`R$ ${v.toLocaleString('pt-BR')}`, 'Vendas']}
                 />
-                <Line type="monotone" dataKey="value" stroke="#9b2b29" strokeWidth={3} dot={{ r: 4, fill: '#9b2b29' }} activeDot={{ r: 6 }} />
+                <Line type="monotone" dataKey="value" stroke="#02904b" strokeWidth={3} dot={{ r: 4, fill: '#02904b' }} activeDot={{ r: 6 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -227,7 +227,7 @@ const Dashboard: React.FC = () => {
                   contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                   formatter={(v: any) => [`R$ ${v.toLocaleString('pt-BR')}`, 'Faturamento']}
                 />
-                <Bar dataKey="value" fill="#9b2b29" radius={[0, 4, 4, 0]} barSize={20} />
+                <Bar dataKey="value" fill="#02904b" radius={[0, 4, 4, 0]} barSize={20} />
               </BarChart>
             </ResponsiveContainer>
           </div>

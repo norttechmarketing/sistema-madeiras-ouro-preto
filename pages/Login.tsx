@@ -95,10 +95,10 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 selection:bg-[#9b2b29]/10 selection:text-[#9b2b29]">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 selection:bg-[#02904b]/10 selection:text-[#02904b]">
       <div className="max-w-md w-full animate-in fade-in zoom-in-95 duration-500 relative">
         <Card className="!p-0 shadow-2xl overflow-hidden border-[#d9d7d8]">
-          <div className="bg-[#9b2b29] p-12 text-center relative overflow-hidden">
+          <div className="bg-[#02904b] p-12 text-center relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white via-transparent to-transparent"></div>
             <div className="relative">
               <img src="https://nyltechsite.com.br/wp-content/uploads/2026/01/Logo.png" alt="Logo" style={{ height: '130px', margin: 'auto', display: 'block', marginBottom: '20px' }} />
@@ -180,7 +180,7 @@ const Login: React.FC = () => {
               href="https://www.norttech.com.br"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-slate-600 font-bold hover:text-[#9b2b29] transition-colors"
+              className="text-slate-600 font-bold hover:text-[#02904b] transition-colors"
             >
               NortTech Marketing
             </a>

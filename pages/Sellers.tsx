@@ -81,10 +81,10 @@ const Sellers: React.FC = () => {
                 ) : sellers.length === 0 ? (
                     <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px] p-8">Nenhum vendedor cadastrado.</p>
                 ) : sellers.map(seller => (
-                    <Card key={seller.id} className={`relative group hover:border-[#9b2b29] transition-all ${!seller.is_active ? 'opacity-60 grayscale-[0.5]' : ''}`}>
+                    <Card key={seller.id} className={`relative group hover:border-[#02904b] transition-all ${!seller.is_active ? 'opacity-60 grayscale-[0.5]' : ''}`}>
                         <div className="flex items-start justify-between">
                             <div className="flex items-center gap-4">
-                                <div className={`p-3 rounded-xl ${seller.is_active ? 'bg-[#9b2b29]/5 text-[#9b2b29]' : 'bg-slate-100 text-slate-400'}`}>
+                                <div className={`p-3 rounded-xl ${seller.is_active ? 'bg-[#02904b]/5 text-[#02904b]' : 'bg-slate-100 text-slate-400'}`}>
                                     <User size={24} />
                                 </div>
                                 <div className="min-w-0">
@@ -114,7 +114,7 @@ const Sellers: React.FC = () => {
                             </button>
                             <button
                                 onClick={() => { setEditingSeller(seller); setIsModalOpen(true); }}
-                                className="p-2 text-slate-400 hover:text-[#9b2b29] hover:bg-slate-50 rounded-lg transition-all"
+                                className="p-2 text-slate-400 hover:text-[#02904b] hover:bg-slate-50 rounded-lg transition-all"
                             >
                                 <Edit2 size={16} />
                             </button>
@@ -144,7 +144,7 @@ const Sellers: React.FC = () => {
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome Completo (Obrigatório)</label>
                                 <input
                                     type="text" required
-                                    className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] outline-none font-bold text-sm transition-all"
+                                    className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none font-bold text-sm transition-all"
                                     value={editingSeller?.name || ''}
                                     onChange={e => setEditingSeller({ ...editingSeller, name: e.target.value })}
                                 />
@@ -154,7 +154,7 @@ const Sellers: React.FC = () => {
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Telefone / WhatsApp (Opcional)</label>
                                 <input
                                     type="text"
-                                    className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-[#9b2b29]/5 focus:border-[#9b2b29] outline-none font-bold text-sm transition-all"
+                                    className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none font-bold text-sm transition-all"
                                     value={editingSeller?.whatsapp || ''}
                                     onChange={e => setEditingSeller({ ...editingSeller, whatsapp: e.target.value })}
                                 />
@@ -172,7 +172,7 @@ const Sellers: React.FC = () => {
                                         checked={editingSeller?.is_active || false}
                                         onChange={e => setEditingSeller({ ...editingSeller, is_active: e.target.checked })}
                                     />
-                                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#9b2b29]"></div>
+                                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#02904b]"></div>
                                 </label>
                             </div>
 
