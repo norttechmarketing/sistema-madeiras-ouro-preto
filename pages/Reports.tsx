@@ -17,7 +17,7 @@ import {
 } from 'recharts';
 
 const Reports: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'geral' | 'vendedores' | 'produtos' | 'clientes' | 'status'>('geral');
+  const [activeTab, setActiveTab] = useState<'geral' | 'vendedores' | 'produtos' | 'clientes'>('geral');
   const [data, setData] = useState<any>(null);
   const [vendedores, setVendedores] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -78,7 +78,6 @@ const Reports: React.FC = () => {
         <TabButton id="vendedores" label="Vendedores" icon={Users} />
         <TabButton id="produtos" label="Produtos" icon={Package} />
         <TabButton id="clientes" label="Clientes" icon={Target} />
-        <TabButton id="status" label="Status" icon={Zap} />
       </div>
 
       {/* Filters Area */}
@@ -306,47 +305,7 @@ const Reports: React.FC = () => {
             </Card>
           )}
 
-          {/* TAB: STATUS */}
-          {activeTab === 'status' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in duration-300">
-              <Card className="lg:col-span-1">
-                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-8">Participação por Status (Pedidos)</h4>
-                <div className="h-64 flex items-center justify-center">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={data?.statusDistribution} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" horizontal stroke="#f1f5f9" />
-                      <XAxis type="number" hide />
-                      <YAxis dataKey="name" type="category" fontSize={10} fontWeight="bold" width={80} stroke="#94a3b8" axisLine={false} tickLine={false} />
-                      <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                      <Bar dataKey="value" fill="#02904b" radius={[0, 4, 4, 0]} name="Pedidos" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
-              <Card className="lg:col-span-2 !p-0 overflow-hidden">
-                <table className="w-full text-left">
-                  <thead className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    <tr>
-                      <th className="px-8 py-5">Status do Registro</th>
-                      <th className="px-8 py-5 text-center">Quantidade</th>
-                      <th className="px-8 py-5 text-right">% de Participação</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {data?.statusDistribution.map((s: any, i: number) => (
-                      <tr key={i} className="hover:bg-slate-50/50">
-                        <td className="px-8 py-5 font-bold text-slate-800 text-sm">{s.name}</td>
-                        <td className="px-8 py-5 text-center font-bold text-slate-500">{s.value}</td>
-                        <td className="px-8 py-5 text-right font-black text-slate-900 text-sm">
-                          {((s.value / (data.kpis.orderCount || 1)) * 100).toFixed(1)}%
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Card>
-            </div>
-          )}
+
 
         </div>
       )}

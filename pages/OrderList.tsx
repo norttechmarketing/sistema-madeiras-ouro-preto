@@ -47,20 +47,6 @@ const OrderList: React.FC = () => {
     return matchesSearch && matchesType;
   });
 
-  const StatusBadge = ({ status }: { status: string }) => {
-    const colors: any = {
-      'Rascunho': 'bg-slate-100 text-slate-500',
-      'Enviado': 'bg-blue-50 text-blue-600 border-blue-100',
-      'Aprovado': 'bg-green-50 text-green-600 border-green-100',
-      'Recusado': 'bg-red-50 text-red-600 border-red-100',
-    };
-    return (
-      <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${colors[status] || colors['Rascunho']}`}>
-        {status}
-      </span>
-    );
-  };
-
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -115,7 +101,7 @@ const OrderList: React.FC = () => {
                 <th className="px-6 py-4">ID / Data</th>
                 <th className="px-6 py-4">Cliente</th>
                 <th className="px-6 py-4">Atendimento</th>
-                <th className="px-6 py-4">Status / Tipo</th>
+                <th className="px-6 py-4 text-center">Tipo</th>
                 <th className="px-6 py-4">Total</th>
                 <th className="px-6 py-4 text-right">Ações</th>
               </tr>
@@ -138,11 +124,10 @@ const OrderList: React.FC = () => {
                       {order.sellerName || '—'}
                     </div>
                   </td>
-                  <td className="px-6 py-5">
-                    <div className="flex flex-col items-start gap-1.5">
-                      <StatusBadge status={order.status} />
-                      <span className="text-[8px] text-slate-300 font-black uppercase tracking-widest ml-1">{order.type}</span>
-                    </div>
+                  <td className="px-6 py-5 text-center">
+                    <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${order.type === 'Pedido' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
+                      {order.type}
+                    </span>
                   </td>
                   <td className="px-6 py-5 font-bold text-slate-900 text-sm">
                     R$ {order.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -164,7 +149,7 @@ const OrderList: React.FC = () => {
               ))}
               {filteredOrders.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="p-20 text-center text-slate-300 font-bold uppercase tracking-widest text-xs">Nenhum pedido / orçamento encontrado.</td>
+                  <td colSpan={5} className="p-20 text-center text-slate-300 font-bold uppercase tracking-widest text-xs">Nenhum pedido / orçamento encontrado.</td>
                 </tr>
               )}
             </tbody>

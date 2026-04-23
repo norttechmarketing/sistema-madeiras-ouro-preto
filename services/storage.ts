@@ -170,6 +170,11 @@ export const storage = {
         console.error('Supabase Save Error:', error);
         throw new Error(`Erro ao sincronizar com Supabase: ${error.message}`);
       }
+
+      // Log actions
+      for (const c of clients) {
+        await storage.logAction('UPSERT', 'clients', c.id, null, c);
+      }
     } catch (err) {
       console.error("Safe catch in saveClients:", err);
     }
@@ -182,6 +187,7 @@ export const storage = {
       console.error('Error deleting client:', error);
       throw new Error(`Erro ao excluir cliente: ${error.message}`);
     }
+    await storage.logAction('DELETE', 'clients', id, null, null);
   },
 
   // --- PRODUCTS ---
@@ -211,7 +217,7 @@ export const storage = {
     }
   },
 
-  saveProducts: async (products: Product[]) => {
+  saveProducts: async (products: Product[], beforeData?: Product) => {
     if (!isConfigured || !supabase) return;
 
     try {
@@ -229,16 +235,21 @@ export const storage = {
         };
       });
 
-      // Upsert lida bem com mix se o ID for PK, mas para garantir inserção correta de novos:
       const { error } = await supabase.from('products').upsert(payload);
 
       if (error) {
         console.error('Error saving products:', error);
         throw new Error(`Erro ao salvar produtos: ${error.message}`);
       }
+
+      for (const p of products) {
+        // Se temos beforeData, é um UPDATE, senão INSERT
+        const action = beforeData ? 'UPDATE' : 'INSERT';
+        await storage.logAction(action, 'products', p.id, beforeData || null, p);
+      }
     } catch (err) {
       console.error("Unexpected error in saveProducts:", err);
-      // Não trava a UI
+      throw err;
     }
   },
 
@@ -247,8 +258,9 @@ export const storage = {
     const { error } = await supabase.from('products').delete().eq('id', id);
     if (error) {
       console.error('Error deleting product:', error);
-      throw new Error(`Erro ao excluir produto: ${error.message}`);
+      throw new Error(`Erro ao excluir product: ${error.message}`);
     }
+    await storage.logAction('DELETE', 'products', id, null, null);
   },
 
   // --- ORDERS ---
@@ -261,7 +273,7 @@ export const storage = {
 
       let query = supabase
         .from('orders')
-        .select('*, items:order_items(*)'); // Join items
+        .select('*, items:order_items(*)'); // Single items table for now
 
       // Role Based Access Control for fetching
       if (user.role !== 'admin') {
@@ -278,43 +290,47 @@ export const storage = {
       }
 
       // MAP DB (snake_case) -> APP (camelCase)
-      return (data || []).map((row: any) => ({
-        id: row.id,
-        clientId: row.client_id,
-        clientName: row.client_name,
-        sellerId: row.seller_id,
-        sellerName: row.seller_name,
-        date: row.date, // ISO String
-        status: row.status,
-        type: row.type,
-        subtotal: Number(row.subtotal),
-        totalDiscount: Number(row.total_discount),
-        globalDiscountType: row.discount_type,
-        globalDiscountValue: Number(row.discount_value || 0),
-        globalDiscountAmount: Number(row.discount_amount || 0),
-        total: Number(row.total),
-        internalNotes: row.internal_notes,
-        customerNotes: row.customer_notes,
-        paymentMethod: row.payment_method,
-        shippingValue: Number(row.shipping_value || 0),
-        deliveryDate: row.delivery_date,
-        createdAt: typeof row.created_at === 'string' ? row.created_at : new Date(row.created_at || Date.now()).toISOString(),
-        items: (row.items || []).map((item: any) => ({
-          id: item.id,
-          productId: item.product_id,
-          description: item.description,
-          quantity: Number(item.quantity),
-          unitPrice: Number(item.unit_price),
-          unit: item.unit,
-          discountType: item.discount_type,
-          discountValue: Number(item.discount_value),
-          total: Number(item.total),
-          category: item.category,
-          comprimento: item.comprimento ? Number(item.comprimento) : undefined,
-          largura: item.largura ? Number(item.largura) : undefined,
-          isBeneficiado: item.is_beneficiado
-        }))
-      }));
+      return (data || []).map((row: any) => {
+        const dbItems = row.items || [];
+        
+        return {
+          id: row.id,
+          clientId: row.client_id || row.clientId,
+          clientName: row.client_name || row.clientName,
+          sellerId: row.seller_id || row.sellerId,
+          sellerName: row.seller_name || row.sellerName,
+          date: row.date,
+          status: row.status,
+          type: row.type,
+          subtotal: Number(row.subtotal || 0),
+          totalDiscount: Number(row.total_discount || row.totalDiscount || 0),
+          globalDiscountType: row.discount_type || row.globalDiscountType,
+          globalDiscountValue: Number(row.discount_value || row.globalDiscountValue || 0),
+          globalDiscountAmount: Number(row.discount_amount || row.globalDiscountAmount || 0),
+          total: Number(row.total || 0),
+          internalNotes: row.internal_notes || row.internalNotes,
+          customerNotes: row.customer_notes || row.customerNotes,
+          paymentMethod: row.payment_method || row.paymentMethod,
+          shippingValue: Number(row.shipping_value || row.shippingValue || 0),
+          deliveryDate: row.delivery_date || row.deliveryDate,
+          createdAt: row.created_at || row.createdAt || new Date().toISOString(),
+          items: dbItems.map((item: any) => ({
+            id: item.id,
+            productId: item.product_id || item.productId,
+            description: item.description,
+            quantity: Number(item.quantity || 0),
+            unitPrice: Number(item.unit_price || item.unitPrice || 0),
+            unit: item.unit,
+            discountType: item.discount_type || item.discountType,
+            discountValue: Number(item.discount_value || item.discountValue || 0),
+            total: Number(item.total || 0),
+            category: item.category,
+            comprimento: item.comprimento,
+            largura: item.largura,
+            isBeneficiado: item.is_beneficiado !== undefined ? item.is_beneficiado : item.isBeneficiado
+          }))
+        };
+      });
     } catch (e) {
       console.error("Unexpected error in getOrders:", e);
       return [];
@@ -330,11 +346,11 @@ export const storage = {
       if (!user) throw new Error("Usuário não autenticado.");
 
       for (const order of orders) {
-        // --- 1. PREPARE HEADER DATA ---
         const orderId = normalizeId(order.id);
         const sellerId = order.sellerId || user.id;
         const sellerName = order.sellerName || user.name;
 
+        // 1. SALVAR CABEÇALHO (Header)
         const headerPayload = {
           id: orderId,
           client_id: order.clientId,
@@ -355,25 +371,21 @@ export const storage = {
           payment_method: order.paymentMethod,
           shipping_value: order.shippingValue,
           delivery_date: order.deliveryDate,
-          created_at: new Date().toISOString()
+          created_at: order.createdAt || new Date().toISOString()
         };
 
-        // --- 2. UPSERT HEADER ---
         const headerResult: any = await withTimeout(() => client.from('orders').upsert(headerPayload), 20000, { retry: true });
-        const headerError = headerResult?.error;
+        if (headerResult?.error) throw new Error(`Erro no cabeçalho: ${headerResult.error.message}`);
 
-        if (headerError) {
-          console.error("Error saving order header:", headerError);
-          throw new Error(`Erro ao salvar cabeçalho do pedido: ${headerError.message}`);
-        }
+        // 2. SALVAR ITENS (Items)
+        const itemsTable = 'order_items'; // Mantendo tabela única até que a outra seja criada
+        
+        // Limpar registros antigos para evitar duplicidade
+        await client.from('order_items').delete().eq('order_id', orderId);
 
-        // --- 3. HANDLE ITEMS (Delete Old -> Insert New) ---
-        await withTimeout(() => client.from('order_items').delete().eq('order_id', orderId), 20000, { retry: true });
-
-        // If there are items, insert them
         if (order.items && order.items.length > 0) {
           const itemsPayload = order.items.map(item => ({
-            id: normalizeId(item.id),
+            // NÃO enviar o campo 'id'. Deixar o Supabase gerar automaticamente.
             order_id: orderId,
             product_id: item.productId,
             description: item.description,
@@ -389,14 +401,11 @@ export const storage = {
             is_beneficiado: item.isBeneficiado
           }));
 
-          const itemsResult: any = await withTimeout(() => client.from('order_items').insert(itemsPayload), 20000, { retry: true });
-          const itemsError = itemsResult?.error;
-
-          if (itemsError) {
-            console.error("Error saving order items:", itemsError);
-            throw new Error(`Erro ao salvar itens: ${itemsError.message}`);
-          }
+          const itemsResult: any = await withTimeout(() => client.from(itemsTable).insert(itemsPayload), 20000, { retry: true });
+          if (itemsResult?.error) throw new Error(`Erro nos itens: ${itemsResult.error.message}`);
         }
+
+        await storage.logAction('UPSERT', 'orders', orderId, null, order);
       }
     } catch (err) {
       console.error("Unexpected error in saveOrders:", err);
@@ -430,12 +439,8 @@ export const storage = {
         }
       }
 
-      // --- DELETE ORDER ITEMS FIRST (Fixing critical deletion bug) ---
-      const { error: itemsError } = await supabase.from('order_items').delete().eq('order_id', id);
-      if (itemsError) {
-        console.error('Error deleting order items:', itemsError);
-        throw new Error(`Erro ao excluir itens do pedido: ${itemsError.message}`);
-      }
+      // --- DELETE ORDER ITEMS ---
+      await supabase.from('order_items').delete().eq('order_id', id);
 
       // --- DELETE HEADER ---
       const { error } = await supabase.from('orders').delete().eq('id', id);
@@ -443,6 +448,7 @@ export const storage = {
         console.error('Error deleting order:', error);
         throw error;
       }
+      await storage.logAction('DELETE', 'orders', id, null, null);
     } catch (err) {
       console.error("Unexpected error in deleteOrder:", err);
       throw err;
@@ -536,6 +542,7 @@ export const storage = {
 
       const { error } = await supabase.from('sellers').upsert(payload);
       if (error) throw error;
+      await storage.logAction('UPSERT', 'sellers', payload.id, null, seller);
     } catch (err) {
       console.error("Error saving seller:", err);
       throw err;
@@ -549,20 +556,22 @@ export const storage = {
       console.error('Error deleting seller:', error);
       throw new Error(`Erro ao excluir vendedor: ${error.message}`);
     }
+    await storage.logAction('DELETE', 'sellers', id, null, null);
   },
 
   // --- AUDIT LOGS ---
-  logAction: async (action: 'INSERT' | 'UPDATE' | 'DELETE', table: string, recordId: string, before: any, after: any) => {
+  logAction: async (action: 'INSERT' | 'UPDATE' | 'DELETE' | 'UPSERT', table: string, recordId: string, before: any, after: any) => {
     if (!isConfigured || !supabase) return;
     try {
       const user = await storage.getCurrentUser();
-      const { error } = await supabase.from('audit_logs').insert({
+      const { error } = await supabase.from('audit_log').insert({
         table_name: table,
         action: action,
         record_id: recordId,
-        before: before,
-        after: after,
+        old_data: before,
+        new_data: after,
         user_id: user?.id,
+        user_email: user?.email,
         created_at: new Date().toISOString()
       });
       if (error) console.warn("Audit Log Error:", error);

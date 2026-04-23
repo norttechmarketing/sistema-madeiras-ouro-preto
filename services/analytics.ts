@@ -72,29 +72,40 @@ export const getAnalyticsData = async (filters: AnalyticsFilters) => {
     const { data: rawOrders, error } = await query;
     if (error) {
         console.error("Analytics fetch error:", error);
-        return null;
+        return {
+            kpis: { totalSold: 0, orderCount: 0, quoteCount: 0, averageTicket: 0, vendasMes: 0 },
+            salesByDay: [],
+            salesBySeller: [],
+            ordersVsQuotesWeekly: [],
+            topProducts: [],
+            statusDistribution: [],
+            monthlyVendas: [],
+            sellerReport: [],
+            topClients: [],
+            rawOrders: []
+        };
     }
 
     // Normalize Data
     const orders: Order[] = (rawOrders || []).map((row: any) => ({
         id: row.id,
-        clientId: row.client_id,
-        clientName: row.client_name,
-        sellerId: row.seller_id,
-        sellerName: row.seller_name,
+        clientId: row.client_id || row.clientId,
+        clientName: row.client_name || row.clientName,
+        sellerId: row.seller_id || row.sellerId,
+        sellerName: row.seller_name || row.sellerName,
         date: row.date,
         status: row.status,
         type: row.type,
-        subtotal: Number(row.subtotal),
-        totalDiscount: Number(row.total_discount),
-        total: Number(row.total),
+        subtotal: Number(row.subtotal || 0),
+        totalDiscount: Number(row.total_discount || row.totalDiscount || 0),
+        total: Number(row.total || 0),
         items: (row.items || []).map((item: any) => ({
             id: item.id,
-            productId: item.product_id,
+            productId: item.product_id || item.productId,
             description: item.description,
-            quantity: Number(item.quantity),
-            unitPrice: Number(item.unit_price),
-            total: Number(item.total)
+            quantity: Number(item.quantity || 0),
+            unitPrice: Number(item.unit_price || item.unitPrice || 0),
+            total: Number(item.total || 0)
         }))
     } as any));
 
@@ -178,12 +189,7 @@ export const getAnalyticsData = async (filters: AnalyticsFilters) => {
         .sort((a, b) => b.total - a.total)
         .slice(0, 5);
 
-    // A3.2: Status dos pedidos
-    const statusCounts: Record<string, number> = {};
-    orderList.forEach(o => {
-        statusCounts[o.status] = (statusCounts[o.status] || 0) + 1;
-    });
-    const statusDistribution = Object.entries(statusCounts).map(([name, value]) => ({ name, value }));
+
 
     // --- B. RELATÓRIOS ANALYTICS ---
 
@@ -274,7 +280,6 @@ export const getAnalyticsData = async (filters: AnalyticsFilters) => {
         salesBySeller,
         ordersVsQuotesWeekly,
         topProducts,
-        statusDistribution,
         // Extensions for Reports
         monthlyVendas,
         sellerReport,

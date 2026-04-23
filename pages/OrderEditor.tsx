@@ -266,7 +266,7 @@ const OrderEditor: React.FC = () => {
     setProductSearch(prod.name);
   };
 
-  const saveOrder = async (silent = false) => {
+  const saveOrder = async (silent = false, typeOverride?: 'Orçamento' | 'Pedido') => {
     if (!selectedClient) {
       alert('Selecione um cliente primeiro.');
       return null;
@@ -285,7 +285,7 @@ const OrderEditor: React.FC = () => {
       sellerName: seller?.name,
       date: new Date().toISOString(),
       status: orderStatus,
-      type: orderType,
+      type: typeOverride || orderType,
       items: orderItems,
       subtotal: subtotalItems,
       totalDiscount: 0, // Not used primarily in this version but kept for type compatibility
@@ -321,29 +321,54 @@ const OrderEditor: React.FC = () => {
     }
   };
 
+  const handleConvertToOrder = async () => {
+    if (!window.confirm("Deseja converter este orçamento em pedido?")) return;
+    
+    try {
+      const saved = await saveOrder(true, 'Pedido');
+      if (saved) {
+        setOrderType('Pedido');
+        alert('Orçamento convertido em Pedido com sucesso!');
+      }
+    } catch (err) {
+      console.error("Error converting quote:", err);
+      alert("Erro ao converter orçamento.");
+    }
+  };
+
   const handleWhatsApp = async () => {
-    if (isSendingWhatsApp) return;
+    if (isSendingWhatsApp || isSaving || isExporting) return;
     setIsSendingWhatsApp(true);
 
     try {
-      const order = await saveOrder(true);
-      if (!order) return;
+      // Se for novo, precisa salvar para gerar ID. Se já existe, usa o state.
+      let currentOrder: any = null;
+      if (id === 'new') {
+        currentOrder = await saveOrder(true);
+      } else {
+        const seller = vendedores.find(v => v.id === selectedSellerId);
+        currentOrder = {
+          id: id!,
+          clientName: selectedClient?.name || 'Cliente',
+          items: orderItems,
+          total: total,
+          sellerName: seller?.name || 'Vendedor',
+          type: orderType
+        };
+      }
 
-      const itemsList = order.items.map(i =>
+      if (!currentOrder) return;
+
+      const itemsList = currentOrder.items.map((i: any) =>
         `${i.quantity} ${i.unit} - ${i.description} (R$ ${i.total.toFixed(2)})`
       ).join('\n');
 
-      const msg = `Olá! Segue seu orçamento da Madeiras Ouro Preto:
-Cliente: ${order.clientName}
-Itens:
-${itemsList}
-
-Total: R$ ${order.total.toFixed(2)}
-Posso te ajudar em mais algo?`;
+      const msg = `Olá! Segue seu ${currentOrder.type} da Madeiras Ouro Preto:\nCliente: ${currentOrder.clientName}\nItens:\n${itemsList}\n\nTotal: R$ ${currentOrder.total.toFixed(2)}\nPosso te ajudar em mais algo?`;
 
       window.open(`https://wa.me/${COMPANY_INFO.whatsapp}?text=${encodeURIComponent(msg)}`, '_blank');
     } catch (error) {
       console.error("WhatsApp error:", error);
+      alert("Erro ao preparar WhatsApp.");
     } finally {
       setIsSendingWhatsApp(false);
     }
@@ -418,8 +443,27 @@ Posso te ajudar em mais algo?`;
     'm2': 'm²', 'm3': 'm³', 'm': 'm', 'un': 'un', 'ML': 'ML', 'Pç': 'Pç', 'Kg': 'Kg', 'JG': 'JG'
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'TEXTAREA') return;
+      e.preventDefault();
+
+      // Especial para checkboxes (como o Benef.): alterna antes de avançar
+      if (target instanceof HTMLInputElement && target.type === 'checkbox') {
+        target.click();
+      }
+
+      const focusable = Array.from(document.querySelectorAll('input:not([disabled]), select:not([disabled]), textarea:not([disabled])')) as HTMLElement[];
+      const index = focusable.indexOf(target);
+      if (index > -1 && index < focusable.length - 1) {
+        focusable[index + 1].focus();
+      }
+    }
+  };
+
   return (
-    <div className="pb-32 space-y-6 animate-in fade-in duration-500">
+    <div className="pb-32 space-y-6 animate-in fade-in duration-500" onKeyDown={handleKeyDown}>
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate('/orders')} className="p-2 hover:bg-slate-100 rounded-xl transition-all text-slate-400 hover:text-slate-900 shrink-0">
@@ -434,19 +478,6 @@ Posso te ajudar em mais algo?`;
                 }`}>
                 {orderType}
               </span>
-              <div className="relative inline-block">
-                <select
-                  value={orderStatus}
-                  onChange={(e) => setOrderStatus(e.target.value as any)}
-                  className="text-[9px] appearance-none bg-slate-50 border border-slate-100 rounded-full px-4 py-0.5 pr-8 font-black uppercase tracking-widest text-slate-400 focus:ring-4 focus:ring-slate-900/5 cursor-pointer outline-none transition-all"
-                >
-                  <option value="Rascunho">Rascunho</option>
-                  <option value="Enviado">Enviado</option>
-                  <option value="Aprovado">Aprovado</option>
-                  <option value="Recusado">Recusado</option>
-                </select>
-                <ChevronDown size={10} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              </div>
             </div>
           </div>
         </div>
@@ -455,20 +486,12 @@ Posso te ajudar em mais algo?`;
           {id && id !== 'new' && (
             <button
               onClick={handleDeleteOrder}
-              disabled={isSaving}
+              disabled={isSaving || isExporting || isSendingWhatsApp}
               className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all disabled:opacity-50"
               title="Excluir Documento"
             >
               <Trash2 size={20} />
             </button>
-          )}
-          {orderType === 'Orçamento' && id !== 'new' && (
-            <PrimaryButton
-              onClick={() => { setOrderType('Pedido'); setOrderStatus('Rascunho'); }}
-              className="!bg-[#02904b]"
-            >
-              <CheckCircle size={16} /> <span className="whitespace-nowrap">Converter em Pedido</span>
-            </PrimaryButton>
           )}
         </div>
       </div>
@@ -915,15 +938,26 @@ Posso te ajudar em mais algo?`;
           <div className="flex flex-wrap items-center justify-center gap-3 w-full sm:w-auto">
             <button
               onClick={() => saveOrder()}
-              disabled={isSaving}
+              disabled={isSaving || isSendingWhatsApp || isExporting}
               className="flex-1 sm:flex-none min-w-[110px] bg-slate-100 text-slate-600 px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-200 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {isSaving ? <div className="w-4 h-4 border-2 border-slate-400 border-t-slate-600 rounded-full animate-spin"></div> : <Save size={18} />}
               <span>{isSaving ? 'Salvar...' : 'Salvar'}</span>
             </button>
+            
+            {orderType === 'Orçamento' && (
+               <button
+                onClick={handleConvertToOrder}
+                disabled={isSaving || isSendingWhatsApp || isExporting}
+                className="flex-1 sm:flex-none min-w-[150px] bg-blue-600 text-white px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-blue-700 transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-blue-100 disabled:opacity-50"
+              >
+                <CheckCircle size={18} />
+                <span>Converter em Pedido</span>
+               </button>
+            )}
             <button
               onClick={handleWhatsApp}
-              disabled={isSendingWhatsApp}
+              disabled={isSaving || isSendingWhatsApp || isExporting}
               className="flex-1 sm:flex-none min-w-[130px] bg-green-500 text-white px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-green-600 transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-green-100 disabled:opacity-50"
             >
               {isSendingWhatsApp ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <Send size={18} />}
@@ -931,7 +965,7 @@ Posso te ajudar em mais algo?`;
             </button>
             <PrimaryButton
               onClick={handlePrint}
-              disabled={isExporting}
+              disabled={isSaving || isSendingWhatsApp || isExporting}
               className="flex-1 sm:flex-none min-w-[150px] shadow-lg shadow-slate-900/20"
             >
               {isExporting ? (

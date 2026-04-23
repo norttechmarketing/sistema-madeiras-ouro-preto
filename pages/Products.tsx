@@ -39,34 +39,37 @@ const Products: React.FC = () => {
     setIsSaving(true);
 
     try {
-      let updatedProducts;
+      // 1. Validação de Campos Obrigatórios
+      if (!formData.name?.trim() || !formData.code?.trim() || !formData.category) {
+        alert("Por favor, preencha Nome, Código e Categoria do produto.");
+        return;
+      }
 
       const payload = {
         ...formData,
-        price: Number(formData.price),
-        price_bruto: Number(formData.price_bruto),
-        price_benef: Number(formData.price_benef)
+        code: formData.code.trim().toUpperCase(),
+        name: formData.name.trim(),
+        price_bruto: Number(formData.price_bruto || 0),
+        price_benef: Number(formData.price_benef || 0)
       };
 
-      if (editingProduct) {
-        updatedProducts = products.map(p =>
-          p.id === editingProduct.id ? { ...p, ...payload } as Product : p
-        );
-      } else {
-        const newProduct: Product = {
-          ...(payload as Product),
-          id: crypto.randomUUID()
-        };
-        updatedProducts = [...products, newProduct];
-      }
+      // Garantir que price exista para compatibilidade
+      (payload as any).price = payload.price_bruto;
 
-      setProducts(updatedProducts);
-      await storage.saveProducts(updatedProducts);
+      const productToSave = editingProduct 
+        ? ({ ...editingProduct, ...payload } as Product) 
+        : ({ ...(payload as Product), id: crypto.randomUUID() } as Product);
+
+      // Desempenho: Salvar apenas o produto alterado/novo, não o catálogo inteiro
+      await storage.saveProducts([productToSave], editingProduct || undefined);
+      
+      // Atualiza estado local e recarrega para garantir sincronia
       await fetchProducts();
 
       closeModal();
     } catch (err: any) {
-      alert(`Erro ao salvar produto: ${err.message}`);
+      console.error("Erro completo ao salvar produto:", err);
+      alert(`Erro ao salvar produto: ${err.message || 'Erro desconhecido'}`);
     } finally {
       setIsSaving(false);
     }
@@ -116,12 +119,25 @@ const Products: React.FC = () => {
     return matchesSearch && matchesCategory;
   });
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'TEXTAREA') return;
+      e.preventDefault();
+      const focusable = Array.from(document.querySelectorAll('input:not([disabled]), select:not([disabled]), textarea:not([disabled])')) as HTMLElement[];
+      const index = focusable.indexOf(target);
+      if (index > -1 && index < focusable.length - 1) {
+        focusable[index + 1].focus();
+      }
+    }
+  };
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-500" onKeyDown={handleKeyDown}>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <PageHeader title="Produtos" subtitle="Gestão completa dos produtos." />
         <PrimaryButton onClick={() => openModal()} className="w-full sm:w-auto">

@@ -124,8 +124,21 @@ const Clients: React.FC = () => {
     c.document.includes(searchTerm)
   );
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'TEXTAREA') return;
+      e.preventDefault();
+      const focusable = Array.from(document.querySelectorAll('input:not([disabled]), select:not([disabled]), textarea:not([disabled])')) as HTMLElement[];
+      const index = focusable.indexOf(target);
+      if (index > -1 && index < focusable.length - 1) {
+        focusable[index + 1].focus();
+      }
+    }
+  };
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-500" onKeyDown={handleKeyDown}>
       <div className="flex justify-between items-center">
         <PageHeader title="Clientes" subtitle="Gerencie sua base de clientes." />
         <PrimaryButton onClick={() => openModal()}>
