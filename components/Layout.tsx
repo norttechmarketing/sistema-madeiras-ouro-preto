@@ -73,12 +73,12 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
           </div>
 
           <nav className="p-6 flex-1 overflow-y-auto no-scrollbar space-y-1">
-            <p className="px-4 text-[10px] font-black text-[#d9d7d8] uppercase tracking-widest mb-4 mt-2">Visão Geral</p>
+            <p className="px-4 text-[10px] font-black text-[#d9d7d8] uppercase tracking-widest mb-4 mt-2">Visão Geral:</p>
             <NavItem to="/dashboard" icon={LayoutDashboard} label="Dashboard" />
             <NavItem to="/orders" icon={FileText} label="Pedidos / Orç." />
             <NavItem to="/relatorios" icon={BarChart3} label="Relatórios" />
 
-            <p className="px-4 text-[10px] font-black text-[#d9d7d8] uppercase tracking-widest mb-4 mt-8">Cadastros</p>
+            <p className="px-4 text-[10px] font-black text-[#d9d7d8] uppercase tracking-widest mb-4 mt-8">Cadastros:</p>
             <NavItem to="/clients" icon={Users} label="Clientes" />
             <NavItem to="/products" icon={Package} label="Produtos" />
             <NavItem to="/sellers" icon={UserIcon} label="Vendedores" />

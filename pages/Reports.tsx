@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { storage } from '../services/storage';
 import { getAnalyticsData, AnalyticsFilters } from '../services/analytics';
-import { User } from '../types';
+import { User, Seller } from '../types';
 import PageHeader from '../components/ui/PageHeader';
 import Card from '../components/ui/Card';
 import PrimaryButton from '../components/ui/PrimaryButton';
@@ -15,11 +15,12 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend, AreaChart, Area
 } from 'recharts';
+import { format } from 'date-fns';
 
 const Reports: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'geral' | 'vendedores' | 'produtos' | 'clientes'>('geral');
   const [data, setData] = useState<any>(null);
-  const [vendedores, setVendedores] = useState<User[]>([]);
+  const [vendedores, setVendedores] = useState<Seller[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filters, setFilters] = useState<AnalyticsFilters>({
     period: '30',
@@ -31,10 +32,10 @@ const Reports: React.FC = () => {
     setIsLoading(true);
     try {
       // For general tab, we always look at 12 months for trends, unless specifically filtered
-      const analyticsFilters = activeTab === 'geral' ? { ...filters, period: '12m' } as any : filters;
+      const analyticsFilters = filters;
       const [analytics, users] = await Promise.all([
         getAnalyticsData(analyticsFilters),
-        storage.getUsers()
+        storage.getSellers()
       ]);
       setData(analytics);
       setVendedores(users);
@@ -64,7 +65,7 @@ const Reports: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-full overflow-x-hidden">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-        <PageHeader title="Relatórios Analíticos" subtitle="Informações estratégicas para tomada de decisão." />
+        <PageHeader title="Relatórios" subtitle="Informações estratégicas para tomada de decisão." />
         <div className="flex items-center gap-3 no-print">
           <PrimaryButton onClick={() => window.print()}>
             <Printer size={16} /> Exportar PDF
@@ -81,38 +82,91 @@ const Reports: React.FC = () => {
       </div>
 
       {/* Filters Area */}
-      {activeTab !== 'geral' && (
-        <Card className="flex flex-wrap items-center gap-6 shadow-sm border-slate-100 no-print">
-          <div className="flex items-center gap-2 text-slate-400 text-[10px] font-black uppercase tracking-widest shrink-0">
-            <Filter size={14} /> Filtros:
+      <Card className="flex flex-wrap items-center gap-6 shadow-sm border-slate-100 no-print">
+        <div className="flex items-center gap-2 text-slate-400 text-[10px] font-black uppercase tracking-widest shrink-0">
+          <Filter size={14} /> Filtros:
+        </div>
+        <div className="relative">
+          <select
+            className="appearance-none bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 pr-8 text-xs font-bold text-slate-700 outline-none focus:ring-4 focus:ring-slate-900/5 transition-all cursor-pointer"
+            value={filters.period}
+            onChange={e => setFilters({ ...filters, period: e.target.value as any })}
+          >
+            <option value="7">Últimos 7 dias</option>
+            <option value="30">Últimos 30 dias</option>
+            <option value="90">Últimos 90 dias</option>
+            <option value="month">Selecionar mês</option>
+            <option value="day">Dia Específico</option>
+            <option value="custom">Período Personalizado</option>
+          </select>
+          <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        </div>
+
+        {filters.period === 'month' && (
+          <div className="flex items-center gap-2 animate-in slide-in-from-left-2 duration-300">
+            <input
+              type="month"
+              className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-4 focus:ring-slate-900/5 transition-all"
+              value={filters.specificDate ? format(filters.specificDate, 'yyyy-MM') : format(new Date(), 'yyyy-MM')}
+              onChange={e => {
+                const [year, month] = e.target.value.split('-');
+                const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+                setFilters({ ...filters, specificDate: date });
+              }}
+            />
           </div>
+        )}
+
+        {filters.period === 'day' && (
+          <input
+            type="date"
+            className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-4 focus:ring-slate-900/5 transition-all"
+            value={filters.specificDate ? filters.specificDate.toISOString().split('T')[0] : ''}
+            onChange={e => {
+              const [y, m, d] = e.target.value.split('-').map(Number);
+              setFilters({ ...filters, specificDate: new Date(y, m - 1, d) });
+            }}
+          />
+        )}
+
+        {filters.period === 'custom' && (
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-4 focus:ring-slate-900/5 transition-all"
+              value={filters.startDate ? filters.startDate.toISOString().split('T')[0] : ''}
+              onChange={e => {
+                const [y, m, d] = e.target.value.split('-').map(Number);
+                setFilters({ ...filters, startDate: new Date(y, m - 1, d) });
+              }}
+            />
+            <span className="text-slate-400 text-[10px] font-black uppercase">até</span>
+            <input
+              type="date"
+              className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-4 focus:ring-slate-900/5 transition-all"
+              value={filters.endDate ? filters.endDate.toISOString().split('T')[0] : ''}
+              onChange={e => {
+                const [y, m, d] = e.target.value.split('-').map(Number);
+                setFilters({ ...filters, endDate: new Date(y, m - 1, d) });
+              }}
+            />
+          </div>
+        )}
+
+        {activeTab !== 'vendedores' && (
           <div className="relative">
             <select
               className="appearance-none bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 pr-8 text-xs font-bold text-slate-700 outline-none focus:ring-4 focus:ring-slate-900/5 transition-all cursor-pointer"
-              value={filters.period}
-              onChange={e => setFilters({ ...filters, period: e.target.value as any })}
+              value={filters.sellerId}
+              onChange={e => setFilters({ ...filters, sellerId: e.target.value })}
             >
-              <option value="7">Últimos 7 dias</option>
-              <option value="30">Últimos 30 dias</option>
-              <option value="90">Últimos 90 dias</option>
+              <option value="all">Todos os Vendedores</option>
+              {vendedores.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
             </select>
             <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           </div>
-          {activeTab !== 'vendedores' && (
-            <div className="relative">
-              <select
-                className="appearance-none bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 pr-8 text-xs font-bold text-slate-700 outline-none focus:ring-4 focus:ring-slate-900/5 transition-all cursor-pointer"
-                value={filters.sellerId}
-                onChange={e => setFilters({ ...filters, sellerId: e.target.value })}
-              >
-                <option value="all">Todos os Vendedores</option>
-                {vendedores.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-              </select>
-              <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-            </div>
-          )}
-        </Card>
-      )}
+        )}
+      </Card>
 
       {/* Content Area */}
       {isLoading ? (
@@ -123,9 +177,34 @@ const Reports: React.FC = () => {
           {/* TAB: VISÃO GERAL */}
           {activeTab === 'geral' && (
             <div className="space-y-8 animate-in fade-in duration-300">
+              {/* ITEM 5: VENDAS POR DIA - AGORA NO TOPO */}
+              <Card>
+                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-8">Vendas por Dia:</h4>
+                <div className="h-72">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={data?.salesByDay}>
+                      <defs>
+                        <linearGradient id="colorDay" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#02904b" stopOpacity={0.1} />
+                          <stop offset="95%" stopColor="#02904b" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="date" fontSize={10} fontWeight="bold" stroke="#94a3b8" axisLine={false} tickLine={false} />
+                      <YAxis fontSize={10} fontWeight="bold" stroke="#94a3b8" axisLine={false} tickLine={false} tickFormatter={(v: number) => `R$ ${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`} />
+                      <Tooltip
+                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                        formatter={(v: any) => [`R$ ${v.toLocaleString('pt-BR')}`, 'Vendas']}
+                      />
+                      <Area type="monotone" dataKey="value" stroke="#02904b" fillOpacity={1} fill="url(#colorDay)" strokeWidth={3} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <Card>
-                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-8">Faturamento Mensal (Últimos 12 Meses)</h4>
+                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-8">Faturamento Mensal (Últimos 12 Meses):</h4>
                   <div className="h-72">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={data?.monthlyVendas}>
@@ -148,7 +227,7 @@ const Reports: React.FC = () => {
                   </div>
                 </Card>
                 <Card>
-                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-8">Volume Mensal: Pedidos vs Orçamentos</h4>
+                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-8">Volume Mensal: Pedidos vs Orçamentos:</h4>
                   <div className="h-72">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={data?.monthlyVendas}>
@@ -163,21 +242,17 @@ const Reports: React.FC = () => {
                     </ResponsiveContainer>
                   </div>
                 </Card>
+
+                {/* ITEM 4: TICKET MÉDIO (NUMERIC) */}
                 <Card className="lg:col-span-2">
-                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-8">Ticket Médio Mensal (Pedidos)</h4>
-                  <div className="h-56">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={data?.monthlyVendas}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis dataKey="month" fontSize={10} fontWeight="bold" stroke="#94a3b8" axisLine={false} tickLine={false} />
-                        <YAxis fontSize={10} fontWeight="bold" stroke="#94a3b8" axisLine={false} tickLine={false} />
-                        <Tooltip
-                          contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                          formatter={(v: any) => [`R$ ${v.toLocaleString('pt-BR')}`, 'Média']}
-                        />
-                        <Line type="step" dataKey="ticket" stroke="#475569" strokeWidth={2} dot={{ r: 4, fill: '#475569' }} />
-                      </LineChart>
-                    </ResponsiveContainer>
+                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-8">Ticket Médio Mensal (Pedidos):</h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                    {data?.monthlyVendas.slice(-6).map((m: any, i: number) => (
+                      <div key={i} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-center">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{m.month}</p>
+                        <p className="text-sm font-bold text-slate-900 truncate">R$ {m.ticket.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                      </div>
+                    ))}
                   </div>
                 </Card>
               </div>
@@ -191,12 +266,12 @@ const Reports: React.FC = () => {
                 <table className="w-full text-left min-w-[800px]">
                   <thead className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                     <tr>
-                      <th className="px-8 py-5">Vendedor</th>
-                      <th className="px-8 py-5">Faturamento (Pedidos)</th>
-                      <th className="px-8 py-5 text-center">Nº Pedidos</th>
-                      <th className="px-8 py-5 text-center">Nº Orçamentos</th>
-                      <th className="px-8 py-5 text-center">Taxa de Conversão</th>
-                      <th className="px-8 py-5 text-right">Ticket Médio</th>
+                      <th className="px-8 py-5">Vendedor:</th>
+                      <th className="px-8 py-5">Faturamento (Pedidos):</th>
+                      <th className="px-8 py-5 text-center">Nº Pedidos:</th>
+                      <th className="px-8 py-5 text-center">Nº Orçamentos:</th>
+                      <th className="px-8 py-5 text-center">Taxa de Conversão:</th>
+                      <th className="px-8 py-5 text-right">Ticket Médio:</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
@@ -231,15 +306,15 @@ const Reports: React.FC = () => {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <Card className="lg:col-span-2 !p-0 overflow-hidden">
                   <div className="p-6 border-b border-slate-50 flex justify-between items-center">
-                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Desempenho por Produto</h4>
+                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Desempenho por Produto:</h4>
                   </div>
                   <div className="max-h-[600px] overflow-y-auto no-scrollbar">
                     <table className="w-full text-left">
                       <thead className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest sticky top-0 z-10">
                         <tr>
-                          <th className="px-8 py-4">Nome do Produto</th>
-                          <th className="px-8 py-4 text-center">Quantidade Vendida</th>
-                          <th className="px-8 py-4 text-right">Faturamento Total</th>
+                          <th className="px-8 py-4">Nome do Produto:</th>
+                          <th className="px-8 py-4 text-center">Qtd. Vendida:</th>
+                          <th className="px-8 py-4 text-right">Faturamento Total:</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
@@ -255,7 +330,7 @@ const Reports: React.FC = () => {
                   </div>
                 </Card>
                 <Card>
-                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-8">Curva de Relevância (Top 10)</h4>
+                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-8">Curva de Relevância (Top 10):</h4>
                   <div className="space-y-6">
                     {data?.topProducts.slice(0, 10).map((p: any, i: number) => (
                       <div key={i}>
@@ -284,10 +359,10 @@ const Reports: React.FC = () => {
                 <table className="w-full text-left min-w-[600px]">
                   <thead className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                     <tr>
-                      <th className="px-8 py-5">Cliente</th>
-                      <th className="px-8 py-5 text-center">Nº Pedidos</th>
-                      <th className="px-8 py-5 text-center">Ticket Médio</th>
-                      <th className="px-8 py-5 text-right">Volume Total Vendido</th>
+                      <th className="px-8 py-5">Cliente:</th>
+                      <th className="px-8 py-5 text-center">Nº Pedidos:</th>
+                      <th className="px-8 py-5 text-center">Ticket Médio:</th>
+                      <th className="px-8 py-5 text-right">Volume Total Vendido:</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">

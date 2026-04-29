@@ -81,7 +81,7 @@ const Products: React.FC = () => {
         await storage.deleteProduct(id);
         setProducts(prev => prev.filter(p => p.id !== id));
       } catch (err: any) {
-        alert("Erro ao excluir. Verifique se o produto está em algum pedido.");
+        alert(`Erro ao excluir produto: ${err.message || 'Verifique sua conexão.'}`);
       }
     }
   };
@@ -148,7 +148,7 @@ const Products: React.FC = () => {
       <Card className="!p-0 overflow-hidden">
         <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row gap-4">
           <div className="relative group flex-1">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-slate-900 transition-colors" size={20} />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-slate-900 transition-colors" size={20} />
             <input
               type="text"
               placeholder="Buscar por nome ou código..."
@@ -172,11 +172,12 @@ const Products: React.FC = () => {
           <table className="w-full text-left">
             <thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
               <tr>
-                <th className="px-6 py-4">Código</th>
-                <th className="px-6 py-4">Produto</th>
-                <th className="px-6 py-4">Categoria</th>
-                <th className="px-6 py-4">Preço</th>
-                <th className="px-6 py-4 text-right">Ações</th>
+                <th className="px-6 py-4">Código:</th>
+                <th className="px-6 py-4">Produto:</th>
+                <th className="px-6 py-4">Categoria:</th>
+                <th className="px-6 py-4">Preço Bruto:</th>
+                <th className="px-6 py-4">Preço Benef.:</th>
+                <th className="px-6 py-4 text-right">Ações:</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -190,7 +191,10 @@ const Products: React.FC = () => {
                     </span>
                   </td>
                   <td className="px-6 py-5 font-bold text-slate-900 text-sm">
-                    {formatCurrency(prod.price)} <span className="text-[10px] font-bold text-slate-400">/ {unitLabels[prod.unit] || prod.unit}</span>
+                    {formatCurrency(prod.price_bruto)} <span className="text-[10px] font-bold text-slate-400">/ {unitLabels[prod.unit] || prod.unit}</span>
+                  </td>
+                  <td className="px-6 py-5 font-bold text-slate-900 text-sm">
+                    {formatCurrency(prod.price_benef)} <span className="text-[10px] font-bold text-slate-400">/ {unitLabels[prod.unit] || prod.unit}</span>
                   </td>
                   <td className="px-6 py-5 text-right">
                     <div className="flex justify-end gap-2">
@@ -219,8 +223,8 @@ const Products: React.FC = () => {
           <Card className="w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 !p-0">
             <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <div>
-                <h3 className="text-xl font-bold text-slate-900 tracking-tight">{editingProduct ? 'Editar Produto' : 'Novo Produto'}</h3>
-                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mt-1">Dados do Catálogo</p>
+                <h3 className="text-xl font-bold text-slate-900 tracking-tight">{editingProduct ? 'Editar Produto:' : 'Novo Produto:'}</h3>
+                {!editingProduct && <p className="text-xs text-slate-500 font-medium uppercase tracking-widest mt-1">Preencha as informações do produto.</p>}
               </div>
               <button onClick={closeModal} className="p-2 hover:bg-slate-200 rounded-xl transition-all text-slate-400 hover:text-slate-900 transition-colors"><X size={24} /></button>
             </div>
@@ -228,7 +232,7 @@ const Products: React.FC = () => {
             <form onSubmit={handleSave} className="p-8 space-y-6">
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-1.5">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Código</label>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Código:</label>
                   <input
                     type="text" required
                     className="w-full p-3 border border-[#d9d7d8] rounded-xl text-sm font-semibold focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none uppercase transition-all"
@@ -237,7 +241,7 @@ const Products: React.FC = () => {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Categoria</label>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Categoria:</label>
                   <select
                     required
                     className="w-full p-3 border border-[#d9d7d8] rounded-xl text-sm font-semibold focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none transition-all appearance-none bg-white"
@@ -264,7 +268,7 @@ const Products: React.FC = () => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Produto</label>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Produto:</label>
                 <input
                   type="text" required
                   className="w-full p-3 border border-slate-300 rounded-xl text-sm font-semibold focus:ring-4 focus:ring-slate-900/5 outline-none transition-all"
@@ -275,7 +279,7 @@ const Products: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-1.5">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Preço Bruto</label>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Preço Bruto:</label>
                   <input
                     type="number" step="0.01" min="0" required
                     className="w-full p-3 border border-[#d9d7d8] rounded-xl text-sm font-semibold focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none transition-all"
@@ -284,7 +288,7 @@ const Products: React.FC = () => {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Preço Beneficiado</label>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Preço Beneficiado:</label>
                   <input
                     type="number" step="0.01" min="0" required
                     className="w-full p-3 border border-[#d9d7d8] rounded-xl text-sm font-semibold focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none transition-all"
@@ -296,7 +300,7 @@ const Products: React.FC = () => {
 
               <div className="grid grid-cols-1 gap-6">
                 <div className="space-y-1.5">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Unidade</label>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Unidade:</label>
                   <select
                     className="w-full p-3 border border-slate-300 rounded-xl text-sm font-semibold focus:ring-4 focus:ring-slate-900/5 outline-none transition-all appearance-none bg-white"
                     value={formData.unit}
@@ -321,7 +325,7 @@ const Products: React.FC = () => {
                   disabled={isSaving}
                   className="px-8"
                 >
-                  {isSaving ? 'Salvando...' : 'Confirmar e Salvar'}
+                  {isSaving ? 'Salvando...' : 'Salvar'}
                 </PrimaryButton>
               </div>
             </form>

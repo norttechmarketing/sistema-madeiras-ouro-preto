@@ -105,7 +105,7 @@ export const generateOrderPDF = async (order: Order, openPrint = false, client?:
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text("Sistema de Gestão de Pedidos", 50, 28);
+    doc.text("Tudo em madeiras brutas e beneficiadas.", 50, 28);
 
     // Document Type and ID
     doc.setFont('helvetica', 'bold');
@@ -187,11 +187,15 @@ export const generateOrderPDF = async (order: Order, openPrint = false, client?:
     // Re-adjust startY for the table
     const tableStartY = order.deliveryDate ? 102 : 95;
 
-    const tableColumn = ["Descrição", "Qtd", "Comp.", "Larg.", "Benef.", "Un", "Vl. Unit.", "Total"];
+    const tableColumn = ["Descrição:", "Qtd:", "Comp.:", "Larg.:", "Benef.:", "Un.:", "Vl. Unit.:", "Total:"];
     const tableRows: any[] = [];
 
     order.items.forEach((item: OrderItem) => {
-      const description = item.category ? `${item.category} — ${item.description}` : item.description;
+      const descLower = item.description.toLowerCase();
+      const catLower = (item.category || '').toLowerCase();
+      const hasCategory = catLower && descLower.includes(catLower);
+      
+      const description = (item.category && !hasCategory) ? `${item.description} - ${item.category}` : item.description;
 
       const formatValue = (v: any) => v && !isNaN(v) ? Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-';
 
@@ -275,7 +279,7 @@ export const generateOrderPDF = async (order: Order, openPrint = false, client?:
     doc.setFontSize(7);
     doc.setTextColor(150, 150, 150);
     doc.text(`Documento gerado em: ${new Date().toLocaleString('pt-BR')}  |  CNPJ: 08.620.035/0001-35`, 14, footerY);
-    doc.text("Madeiras Ouro Preto - Qualidade e Tradição em Madeiras", pageWidth - 14, footerY, { align: 'right' });
+    doc.text("Madeiras Ouro Preto - Tudo em madeiras brutas e beneficiadas.", pageWidth - 14, footerY, { align: 'right' });
 
     const fileName = `OuroPreto_${order.type?.toUpperCase() || 'DOC'}_${order.id?.slice(-6).toUpperCase() || '000000'}.pdf`;
 

@@ -83,7 +83,9 @@ const Dashboard: React.FC = () => {
             <option value="7">Últimos 7 dias</option>
             <option value="30">Últimos 30 dias</option>
             <option value="90">Últimos 90 dias</option>
+            <option value="month">Selecionar Mês</option>
             <option value="day">Dia Específico</option>
+            <option value="custom">Período Personalizado</option>
           </select>
 
           {filters.period === 'day' && (
@@ -91,8 +93,48 @@ const Dashboard: React.FC = () => {
               type="date"
               className="bg-transparent text-xs font-bold text-slate-600 outline-none cursor-pointer px-2 border-l border-slate-100"
               value={filters.specificDate ? filters.specificDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]}
-              onChange={e => setFilters({ ...filters, specificDate: new Date(e.target.value) })}
+              onChange={e => {
+                const [y, m, d] = e.target.value.split('-').map(Number);
+                setFilters({ ...filters, specificDate: new Date(y, m - 1, d) });
+              }}
             />
+          )}
+
+          {filters.period === 'month' && (
+            <input
+              type="month"
+              className="bg-transparent text-xs font-bold text-slate-600 outline-none cursor-pointer px-2 border-l border-slate-100"
+              value={filters.specificDate ? filters.specificDate.toISOString().substring(0, 7) : new Date().toISOString().substring(0, 7)}
+              onChange={e => {
+                const [year, month] = e.target.value.split('-');
+                const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+                setFilters({ ...filters, specificDate: date });
+              }}
+            />
+          )}
+
+          {filters.period === 'custom' && (
+            <div className="flex items-center gap-2 px-2 border-l border-slate-100">
+              <input
+                type="date"
+                className="bg-transparent text-[10px] font-bold text-slate-600 outline-none cursor-pointer"
+                value={filters.startDate ? filters.startDate.toISOString().split('T')[0] : ''}
+                onChange={e => {
+                  const [y, m, d] = e.target.value.split('-').map(Number);
+                  setFilters({ ...filters, startDate: new Date(y, m - 1, d) });
+                }}
+              />
+              <span className="text-slate-300 text-[9px] font-black uppercase">até</span>
+              <input
+                type="date"
+                className="bg-transparent text-[10px] font-bold text-slate-600 outline-none cursor-pointer"
+                value={filters.endDate ? filters.endDate.toISOString().split('T')[0] : ''}
+                onChange={e => {
+                  const [y, m, d] = e.target.value.split('-').map(Number);
+                  setFilters({ ...filters, endDate: new Date(y, m - 1, d) });
+                }}
+              />
+            </div>
           )}
 
           <select
@@ -167,7 +209,7 @@ const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <KPICard
           title="Total Vendido:"
-          value={isLoading ? "..." : `R$ ${data?.kpis.totalSold.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`}
+          value={isLoading ? "..." : `R$ ${data?.kpis.totalSold.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
           icon={DollarSign}
           colorClass="bg-green-50 text-green-600"
           subtitle="Somente pedidos."
@@ -188,7 +230,7 @@ const Dashboard: React.FC = () => {
         />
         <KPICard
           title="Vendas do mês:"
-          value={isLoading ? "..." : `R$ ${data?.kpis.vendasMes.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`}
+          value={isLoading ? "..." : `R$ ${data?.kpis.vendasMes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
           icon={ShoppingCart}
           colorClass="bg-orange-50 text-orange-600"
           subtitle="Mês atual."

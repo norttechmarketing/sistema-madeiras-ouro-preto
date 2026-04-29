@@ -7,7 +7,7 @@ import { COMPANY_INFO } from '../constants';
 import { generateOrderPDF } from '../services/pdfGenerator';
 import {
   Search, Plus, Trash2, Save, Send, Printer, FileText, ArrowLeft,
-  CheckCircle, XCircle, Users, User as UserIcon, ChevronDown
+  CheckCircle, XCircle, Users, User as UserIcon, ChevronDown, X
 } from 'lucide-react';
 import Card from '../components/ui/Card';
 import PrimaryButton from '../components/ui/PrimaryButton';
@@ -29,6 +29,14 @@ function normalizeWidthForArea(unit: string | undefined, width: number): number 
   }
   return width;
 }
+
+const formatProductDisplayName = (name: string, category?: string) => {
+  if (!category) return name;
+  const nameLower = name.toLowerCase();
+  const catLower = category.toLowerCase();
+  if (nameLower.includes(catLower)) return name;
+  return `${name} - ${category}`;
+};
 
 const OrderEditor: React.FC = () => {
   const { id } = useParams();
@@ -63,6 +71,8 @@ const OrderEditor: React.FC = () => {
   const [clientSearch, setClientSearch] = useState('');
   const [productSearch, setProductSearch] = useState('');
   const [showClientList, setShowClientList] = useState(false);
+  const [isNewClientModalOpen, setIsNewClientModalOpen] = useState(false);
+  const [newClientData, setNewClientData] = useState<Partial<Client>>({ type: 'PF', name: '', document: '', phone: '', address: '' });
 
   // New Item State
   const [newItem, setNewItem] = useState<{
@@ -105,8 +115,10 @@ const OrderEditor: React.FC = () => {
       setClients(c);
       setProducts(p);
       setVendedores(s);
+      return s; // Retorna os vendedores para uso imediato no init
     } catch (err) {
       console.error("Erro ao carregar dados base:", err);
+      return [];
     }
   };
 
@@ -144,12 +156,18 @@ const OrderEditor: React.FC = () => {
 
   useEffect(() => {
     const init = async () => {
-      await loadBaseData();
+      const activeSellers = await loadBaseData();
       if (id && id !== 'new') {
         await loadOrderData(id);
       } else {
         const currentUser = await storage.getCurrentUser();
-        if (currentUser && !selectedSellerId) setSelectedSellerId(currentUser.id);
+        if (currentUser && !selectedSellerId) {
+          // Só auto-seleciona se o usuário for um vendedor válido
+          const isSeller = (activeSellers || []).find((v: any) => v.id === currentUser.id);
+          if (isSeller) {
+            setSelectedSellerId(currentUser.id);
+          }
+        }
         if (typeParam === 'Orçamento' || typeParam === 'Pedido') setOrderType(typeParam);
       }
     };
@@ -233,8 +251,10 @@ const OrderEditor: React.FC = () => {
   const updateItem = (id: string, field: keyof OrderItem, value: any) => {
     setOrderItems(items => items.map(item => {
       if (item.id !== id) return item;
-      const numValue = value === '' ? 0 : Number(value);
-      const updated = { ...item, [field]: numValue };
+      
+      const isNumeric = ['quantity', 'unitPrice', 'discountValue', 'comprimento', 'largura', 'total'].includes(field);
+      const val = isNumeric ? (value === '' ? 0 : Number(value)) : value;
+      const updated = { ...item, [field]: val };
 
       let discount = 0;
       const sub = getItemBaseTotal(updated);
@@ -254,16 +274,18 @@ const OrderEditor: React.FC = () => {
   };
 
   const handleProductSelect = (prod: Product) => {
+    const fullDescription = formatProductDisplayName(prod.name, prod.category);
+    
     setNewItem({
       ...newItem,
       productId: prod.id,
-      description: prod.name,
+      description: fullDescription,
       quantity: '',
       price: newItem.isBeneficiado ? prod.price_benef : prod.price_bruto,
       unit: prod.unit || 'un',
       category: prod.category || ''
     });
-    setProductSearch(prod.name);
+    setProductSearch(fullDescription);
   };
 
   const saveOrder = async (silent = false, typeOverride?: 'Orçamento' | 'Pedido') => {
@@ -273,9 +295,15 @@ const OrderEditor: React.FC = () => {
     }
 
     if (isSaving) return null;
-    setIsSaving(true);
 
+    // Validar Vendedor (seller_id)
     const seller = vendedores.find(v => v.id === selectedSellerId);
+    if (!selectedSellerId || !seller) {
+      alert('Selecione um vendedor válido antes de salvar/exportar.');
+      return null;
+    }
+
+    setIsSaving(true);
 
     const orderData: Order = {
       id: id === 'new' ? uuid() : id!,
@@ -335,9 +363,16 @@ const OrderEditor: React.FC = () => {
       alert("Erro ao converter orçamento.");
     }
   };
-
   const handleWhatsApp = async () => {
     if (isSendingWhatsApp || isSaving || isExporting) return;
+
+    // Validar Vendedor (seller_id)
+    const seller = vendedores.find(v => v.id === selectedSellerId);
+    if (!selectedSellerId || !seller) {
+      alert('Selecione um vendedor válido antes de enviar pelo WhatsApp.');
+      return;
+    }
+
     setIsSendingWhatsApp(true);
 
     try {
@@ -389,9 +424,16 @@ const OrderEditor: React.FC = () => {
       }
     }
   };
-
   const handlePrint = async () => {
     if (isExporting) return;
+
+    // Validar Vendedor (seller_id)
+    const seller = vendedores.find(v => v.id === selectedSellerId);
+    if (!selectedSellerId || !seller) {
+      alert('Selecione um vendedor válido antes de exportar.');
+      return;
+    }
+
     setIsExporting(true);
 
     try {
@@ -463,7 +505,7 @@ const OrderEditor: React.FC = () => {
   };
 
   return (
-    <div className="pb-32 space-y-6 animate-in fade-in duration-500" onKeyDown={handleKeyDown}>
+    <div className="pb-48 space-y-6 animate-in fade-in duration-500" onKeyDown={handleKeyDown}>
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate('/orders')} className="p-2 hover:bg-slate-100 rounded-xl transition-all text-slate-400 hover:text-slate-900 shrink-0">
@@ -471,7 +513,7 @@ const OrderEditor: React.FC = () => {
           </button>
           <div className="min-w-0">
             <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight truncate">
-              {id === 'new' ? `Novo ${orderType}` : `${orderType} #${id?.slice(-6).toUpperCase()}`}
+              {id === 'new' ? `Novo ${orderType}:` : `${orderType} #${id?.slice(-6).toUpperCase()}:`}
             </h2>
             <div className="flex items-center gap-2 mt-1">
               <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${orderType === 'Pedido' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-amber-50 text-amber-600 border-amber-100'
@@ -499,9 +541,19 @@ const OrderEditor: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="space-y-6">
           <Card>
-            <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-4 flex items-center gap-2">
-              <Users size={16} className="text-slate-400" /> Dados do Cliente
-            </h3>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                <Users size={16} className="text-slate-400" /> Dados do Cliente:
+              </h3>
+              {!selectedClient && (
+                <button 
+                  onClick={() => setIsNewClientModalOpen(true)}
+                  className="text-[10px] font-black text-[#02904b] uppercase tracking-widest hover:underline"
+                >
+                  + Novo Cliente
+                </button>
+              )}
+            </div>
 
             {selectedClient ? (
               <div className="bg-slate-50 p-4 rounded-xl relative group border border-slate-100">
@@ -549,11 +601,11 @@ const OrderEditor: React.FC = () => {
 
           <Card>
             <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-4 flex items-center gap-2">
-              <UserIcon size={16} className="text-slate-400" /> Informações Adicionais
+              <UserIcon size={16} className="text-slate-400" /> Informações Adicionais:
             </h3>
             <div className="space-y-5">
               <div className="space-y-1.5 text-center sm:text-left">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Vendedor Responsável</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Vendedor:</label>
                 <div className="relative">
                   <select
                     className="w-full appearance-none p-2.5 bg-slate-50 border border-[#d9d7d8] rounded-xl font-bold text-sm outline-none focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] transition-all"
@@ -569,7 +621,7 @@ const OrderEditor: React.FC = () => {
                 </div>
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Observações no PDF</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Observações:</label>
                 <textarea
                   className="w-full p-3.5 bg-slate-50 border border-[#d9d7d8] rounded-xl text-sm h-32 resize-none outline-none focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] font-medium transition-all"
                   value={customerNotes}
@@ -579,7 +631,7 @@ const OrderEditor: React.FC = () => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Forma de Pagamento</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Forma de Pagamento:</label>
                 <div className="relative">
                   <select
                     className="w-full appearance-none p-2.5 bg-slate-50 border border-[#d9d7d8] rounded-xl font-bold text-sm outline-none focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] transition-all"
@@ -609,7 +661,7 @@ const OrderEditor: React.FC = () => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Data de Entrega</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Data de Entrega:</label>
                 <input
                   type="date"
                   className="w-full p-2.5 bg-slate-50 border border-[#d9d7d8] rounded-xl font-bold text-sm outline-none focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] transition-all"
@@ -624,10 +676,10 @@ const OrderEditor: React.FC = () => {
         <div className="lg:col-span-2 space-y-6">
           <Card className="!p-0 overflow-hidden flex flex-col">
             <div className="p-6 border-b border-slate-100">
-              <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-4">Itens do Documento</h3>
+              <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-4">Itens do Pedido:</h3>
               <div className="bg-slate-50/50 p-4 rounded-2xl flex flex-wrap items-end gap-3 border border-slate-100">
                 <div className="flex-1 min-w-[280px] relative group space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Produto</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Produto:</label>
                   <div className="relative">
                     <input
                       type="text"
@@ -643,13 +695,15 @@ const OrderEditor: React.FC = () => {
                   </div>
                   {productSearch && !newItem.productId && products.some(p => p.name.toLowerCase().includes(productSearch.toLowerCase())) && (
                     <div className="absolute top-full left-0 w-full bg-white shadow-2xl rounded-2xl mt-2 z-30 max-h-48 overflow-y-auto border border-slate-200 p-1">
-                      {products.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase())).map(p => (
+                      {products.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()) || p.category?.toLowerCase().includes(productSearch.toLowerCase())).map(p => (
                         <div
                           key={p.id}
                           className="p-3 hover:bg-slate-50 cursor-pointer text-sm rounded-xl flex justify-between items-center transition-colors"
                           onClick={() => handleProductSelect(p)}
                         >
-                          <span className="font-bold text-slate-800">{p.name} <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest">({unitLabels[p.unit] || p.unit})</span></span>
+                          <span className="font-bold text-slate-800">
+                            {p.name}{p.category ? ` - ${p.category}` : ''} <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest">({unitLabels[p.unit] || p.unit})</span>
+                          </span>
                           <span className="text-slate-900 font-black text-xs">R$ {(newItem.isBeneficiado ? p.price_benef : p.price_bruto).toFixed(2)}</span>
                         </div>
                       ))}
@@ -658,7 +712,7 @@ const OrderEditor: React.FC = () => {
                 </div>
 
                 <div className="w-[140px] space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Qtd</label>
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Qtd:</label>
                   <input
                     type="number"
                     className="w-full h-[48px] p-3 bg-white border border-[#d9d7d8] rounded-xl text-[17px] font-bold outline-none focus:ring-2 focus:ring-[#02904b] focus:border-[#02904b] focus:bg-white transition-all text-right"
@@ -672,7 +726,7 @@ const OrderEditor: React.FC = () => {
 
                 {(newItem.unit === 'ML' || newItem.unit === 'm2') && (
                   <div className="w-[140px] space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Comp.</label>
+                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Comp.:</label>
                     <input
                       type="number"
                       className="w-full h-[48px] p-3 bg-white border border-[#d9d7d8] rounded-xl text-[17px] font-bold outline-none focus:ring-2 focus:ring-[#02904b] focus:border-[#02904b] focus:bg-white transition-all text-right"
@@ -687,7 +741,7 @@ const OrderEditor: React.FC = () => {
 
                 {newItem.unit === 'm2' && (
                   <div className="w-[140px] space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">LARG. (cm)</label>
+                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">LARG. (cm):</label>
                     <input
                       type="number"
                       className="w-full h-[48px] p-3 bg-white border border-[#d9d7d8] rounded-xl text-[17px] font-bold outline-none focus:ring-2 focus:ring-[#02904b] focus:border-[#02904b] focus:bg-white transition-all text-right"
@@ -701,7 +755,7 @@ const OrderEditor: React.FC = () => {
                 )}
 
                 <div className="w-[90px] space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block text-center">Benef.</label>
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block text-center">Benef.:</label>
                   <div className="flex justify-center items-center h-[48px] bg-white border border-[#d9d7d8] rounded-xl">
                     <input
                       type="checkbox"
@@ -721,7 +775,7 @@ const OrderEditor: React.FC = () => {
                 </div>
 
                 <div className="w-[160px] space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Preço Unit.</label>
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Preço Unit.:</label>
                   <div className="w-full h-[48px] p-3 bg-slate-100 border border-slate-200 rounded-xl text-[17px] font-black text-slate-600 flex items-center justify-end">
                     R$ {Number(newItem.price || 0).toFixed(2)}
                   </div>
@@ -742,16 +796,16 @@ const OrderEditor: React.FC = () => {
               <table className="w-full text-left min-w-[1100px]">
                 <thead className="bg-slate-50/50 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                   <tr>
-                    <th className="px-6 py-4">Código</th>
-                    <th className="px-6 py-4 min-w-[150px]">Descrição</th>
-                    <th className="px-4 py-4 w-[140px] min-w-[140px]">QTD</th>
-                    <th className="px-4 py-4 w-[140px] min-w-[140px]">Comp.</th>
-                    <th className="px-4 py-4 w-[140px] min-w-[140px]">Larg.</th>
-                    <th className="px-4 py-4 w-20">Benef.</th>
-                    <th className="px-4 py-4 w-20">Unid.</th>
-                    <th className="px-4 py-4 w-[140px] min-w-[140px]">VL. Unit</th>
-                    <th className="px-4 py-4 w-[140px] min-w-[140px]">Desconto</th>
-                    <th className="px-6 py-4 w-[140px] min-w-[140px] text-right">Subtotal</th>
+                    <th className="px-6 py-4">Código:</th>
+                    <th className="px-6 py-4 min-w-[150px]">Descrição:</th>
+                    <th className="px-4 py-4 w-[140px] min-w-[140px]">QTD:</th>
+                    <th className="px-4 py-4 w-[140px] min-w-[140px]">Comp.:</th>
+                    <th className="px-4 py-4 w-[140px] min-w-[140px]">Larg.:</th>
+                    <th className="px-4 py-4 w-20">Benef.:</th>
+                    <th className="px-4 py-4 w-20">Unid.:</th>
+                    <th className="px-4 py-4 w-[140px] min-w-[140px]">VL. Unit:</th>
+                    <th className="px-4 py-4 w-[180px] min-w-[180px]">Desconto:</th>
+                    <th className="px-6 py-4 w-[140px] min-w-[140px] text-right">Subtotal:</th>
                     <th className="px-6 py-4 w-12"></th>
                   </tr>
                 </thead>
@@ -762,12 +816,9 @@ const OrderEditor: React.FC = () => {
                       <tr key={item.id} className="hover:bg-slate-50/30 transition-colors">
                         <td className="px-6 py-4 text-[10px] font-bold text-slate-400">{prod?.code || '—'}</td>
                         <td className="px-6 py-4">
-                          {item.category && (
-                            <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-0.5">
-                              {item.category}
-                            </p>
-                          )}
-                          <p className="font-bold text-slate-900 text-sm break-words">{item.description}</p>
+                          <p className="font-bold text-slate-900 text-sm break-words">
+                            {formatProductDisplayName(item.description, item.category)}
+                          </p>
                         </td>
 
                         <td className="px-6 py-4">
@@ -840,21 +891,28 @@ const OrderEditor: React.FC = () => {
                           />
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex items-center gap-1">
-                            <input
-                              type="number"
-                              className="w-full h-[48px] p-3 bg-slate-50 border border-slate-100 rounded-xl text-[17px] font-bold text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-[#02904b] transition-all text-right"
-                              value={item.discountValue || ''}
-                              onChange={(e) => updateItem(item.id, 'discountValue', e.target.value)}
-                            />
-                            <button
-                              onClick={() => updateItem(item.id, 'discountType', item.discountType === 'percentage' ? 'fixed' : 'percentage')}
-                              className="text-[10px] font-black text-slate-900 min-w-[20px] hover:scale-125 transition-transform"
-                            >
-                              {item.discountType === 'percentage' ? '%' : '$'}
-                            </button>
-                          </div>
-                        </td>
+                              <div className="flex items-center gap-1">
+                               <button
+                                  onClick={() => updateItem(item.id, 'discountType', item.discountType === 'percentage' ? 'fixed' : 'percentage')}
+                                  className={`text-[10px] font-black min-w-[28px] h-[48px] rounded-xl transition-all border flex items-center justify-center ${
+                                    item.discountType === 'percentage' 
+                                    ? 'bg-amber-50 text-amber-600 border-amber-100' 
+                                    : 'bg-blue-50 text-blue-600 border-blue-100'
+                                  }`}
+                                  title="Clique para alternar entre R$ e %"
+                                >
+                                  {item.discountType === 'percentage' ? '%' : 'R$'}
+                                </button>
+                                <div className="flex-1">
+                                  <input
+                                    type="number"
+                                    className="w-full h-[48px] px-3 bg-slate-50 border border-slate-100 rounded-xl text-[17px] font-bold text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-[#02904b] transition-all text-right"
+                                    value={item.discountValue || ''}
+                                    onChange={(e) => updateItem(item.id, 'discountValue', e.target.value)}
+                                  />
+                                </div>
+                              </div>
+                          </td>
                         <td className="px-6 py-4 text-right font-bold text-slate-900 text-sm tabular-nums">
                           R$ {item.total.toFixed(2)}
                         </td>
@@ -889,16 +947,19 @@ const OrderEditor: React.FC = () => {
                       onClick={() => setGlobalDiscountType(prev => prev === 'percent' ? 'fixed' : 'percent')}
                       className="px-2 py-1 bg-slate-100 rounded-lg text-[10px] font-black text-slate-600 hover:bg-slate-200 transition-colors"
                     >
-                      {globalDiscountType === 'percent' ? '%' : 'R$'}
+                      Alternar p/ {globalDiscountType === 'percent' ? 'R$' : '%'}
                     </button>
                   </div>
-                  <input
-                    type="number"
-                    placeholder="0,00"
-                    className="w-full h-[40px] px-3 bg-slate-50 border border-slate-100 rounded-xl text-right font-bold text-red-500 outline-none focus:ring-2 focus:ring-[#02904b] transition-all"
-                    value={globalDiscountValue}
-                    onChange={(e) => setGlobalDiscountValue(e.target.value)}
-                  />
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">{globalDiscountType === 'percent' ? '' : 'R$'}</span>
+                      <input
+                        type="number"
+                        placeholder="0,00"
+                        className={`w-full h-[40px] ${globalDiscountType === 'percent' ? 'px-3' : 'pl-9 pr-3'} bg-slate-50 border border-slate-100 rounded-xl text-right font-bold text-red-500 outline-none focus:ring-2 focus:ring-[#02904b] transition-all`}
+                        value={globalDiscountValue}
+                        onChange={(e) => setGlobalDiscountValue(e.target.value)}
+                      />
+                    </div>
                   {globalDiscountType === 'percent' && Number(globalDiscountValue) > 0 && (
                     <div className="text-right text-[10px] font-bold text-red-400">
                       - R$ {globalDiscountAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -909,15 +970,17 @@ const OrderEditor: React.FC = () => {
                 <div className="flex flex-col w-full max-w-[320px] p-4 bg-white rounded-2xl border border-slate-100 shadow-sm gap-2">
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Frete:</span>
-                    <span className="px-2 py-1 bg-slate-100 rounded-lg text-[10px] font-black text-slate-600">R$</span>
                   </div>
-                  <input
-                    type="number"
-                    placeholder="0,00"
-                    className="w-full h-[40px] px-3 bg-slate-50 border border-slate-100 rounded-xl text-right font-bold text-green-600 outline-none focus:ring-2 focus:ring-[#02904b] transition-all"
-                    value={shippingValue}
-                    onChange={(e) => setShippingValue(e.target.value)}
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">R$</span>
+                    <input
+                      type="number"
+                      placeholder="0,00"
+                      className="w-full h-[40px] pl-9 pr-3 bg-slate-50 border border-slate-100 rounded-xl text-right font-bold text-green-600 outline-none focus:ring-2 focus:ring-[#02904b] transition-all"
+                      value={shippingValue}
+                      onChange={(e) => setShippingValue(e.target.value)}
+                    />
+                  </div>
                 </div>
 
                 <div className="flex justify-between w-full max-w-[320px] text-3xl font-bold text-slate-900 mt-4 pt-4 border-t-2 border-dashed border-slate-200 tabular-nums">
@@ -930,11 +993,7 @@ const OrderEditor: React.FC = () => {
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 lg:left-64 right-0 bg-white/90 backdrop-blur-md border-t border-slate-200 p-4 sm:p-6 shadow-[0_-10px_30px_rgba(15,23,42,0.06)] z-40">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="hidden sm:block text-[9px] font-black text-slate-300 uppercase tracking-[0.3em]">
-            OURO PRETO • SISTEMA DE GESTÃO
-          </div>
+      <Card className="sticky bottom-0 z-40 no-print mt-12 !p-6 shadow-lg flex flex-col sm:flex-row items-center justify-end gap-4">
           <div className="flex flex-wrap items-center justify-center gap-3 w-full sm:w-auto">
             <button
               onClick={() => saveOrder()}
@@ -980,8 +1039,158 @@ const OrderEditor: React.FC = () => {
               )}
             </PrimaryButton>
           </div>
+      </Card>
+      {/* Modal de Novo Cliente */}
+      {isNewClientModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto !p-0 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">Novo Cliente:</h3>
+                <p className="text-xs text-slate-500 font-medium uppercase tracking-widest mt-1">Preencha as informações do cliente.</p>
+              </div>
+              <button onClick={() => setIsNewClientModalOpen(false)} className="text-slate-400 hover:text-slate-900 p-2 hover:bg-slate-100 rounded-xl transition-all">
+                <X size={24} />
+              </button>
+            </div>
+
+            <form 
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const client: Client = { ...newClientData as Client, id: uuid() };
+                await storage.saveClients([client]);
+                setClients(prev => [...prev, client]);
+                setSelectedClient(client);
+                setIsNewClientModalOpen(false);
+                setNewClientData({ type: 'PF', name: '', document: '', phone: '', address: '', email: '', internalNotes: '' });
+              }} 
+              className="p-8 space-y-6"
+            >
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-slate-700 ml-1">Tipo:</label>
+                  <select
+                    className="w-full p-2.5 border border-[#d9d7d8] rounded-xl text-sm font-medium focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none"
+                    value={newClientData.type}
+                    onChange={(e) => setNewClientData({ ...newClientData, type: e.target.value as 'PF' | 'PJ' })}
+                  >
+                    <option value="PF">Pessoa Física</option>
+                    <option value="PJ">Pessoa Jurídica</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-slate-700 ml-1">CPF / CNPJ:</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                    className="w-full p-2.5 border border-[#d9d7d8] rounded-xl text-sm font-medium focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none"
+                    value={newClientData.document}
+                    onChange={(e) => setNewClientData({ ...newClientData, document: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-slate-700 ml-1">Nome Completo / Razão Social:</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: João Silva ou Empresa LTDA"
+                  className="w-full p-2.5 border border-[#d9d7d8] rounded-xl text-sm font-medium focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none"
+                  value={newClientData.name}
+                  onChange={(e) => setNewClientData({ ...newClientData, name: e.target.value })}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-slate-700 ml-1">WhatsApp:</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="(00) 00000-0000"
+                    className="w-full p-2.5 border border-[#d9d7d8] rounded-xl text-sm font-medium focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none"
+                    value={newClientData.phone}
+                    onChange={(e) => setNewClientData({ ...newClientData, phone: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-slate-700 ml-1">CEP:</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="00000-000"
+                      className="flex-1 p-2.5 border border-[#d9d7d8] rounded-xl text-sm font-medium focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none"
+                      value={newClientData.cep || ''}
+                      onChange={(e) => setNewClientData({ ...newClientData, cep: e.target.value })}
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const cleanCep = (newClientData.cep || '').replace(/\D/g, '');
+                        if (cleanCep.length === 8) {
+                          try {
+                            const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+                            const d = await res.json();
+                            if (!d.erro) {
+                              setNewClientData(prev => ({
+                                ...prev,
+                                address: `${d.logradouro}${d.bairro ? `, ${d.bairro}` : ''}, ${d.localidade} - ${d.uf}`
+                              }));
+                            } else {
+                              alert("CEP não encontrado.");
+                            }
+                          } catch {
+                            alert("Erro ao buscar CEP.");
+                          }
+                        } else {
+                          alert("CEP inválido.");
+                        }
+                      }}
+                      className="px-4 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition-colors uppercase tracking-widest"
+                    >
+                      Buscar
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-slate-700 ml-1">Endereço Completo:</label>
+                <input
+                  type="text"
+                  placeholder="Rua, número, bairro, cidade - UF"
+                  className="w-full p-2.5 border border-[#d9d7d8] rounded-xl text-sm font-medium focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none"
+                  value={newClientData.address}
+                  onChange={(e) => setNewClientData({ ...newClientData, address: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-slate-700 ml-1">Observações:</label>
+                <textarea
+                  className="w-full p-3 border border-[#d9d7d8] rounded-xl h-24 text-sm font-medium focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none resize-none"
+                  value={newClientData.internalNotes || ''}
+                  onChange={(e) => setNewClientData({ ...newClientData, internalNotes: e.target.value })}
+                  placeholder="Informações adicionais sobre o cliente..."
+                ></textarea>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                <button type="button" onClick={() => setIsNewClientModalOpen(false)} className="px-6 py-2.5 text-slate-500 hover:bg-slate-50 rounded-xl font-bold text-sm transition-all uppercase tracking-widest">Cancelar</button>
+                <PrimaryButton
+                  type="submit"
+                  disabled={isSaving}
+                  className="px-8"
+                >
+                  {isSaving ? 'Salvando...' : 'Salvar'}
+                </PrimaryButton>
+              </div>
+            </form>
+          </Card>
         </div>
-      </div>
+      )}
     </div>
   );
 };

@@ -69,7 +69,7 @@ const Sellers: React.FC = () => {
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
             <div className="flex justify-between items-center text-center sm:text-left">
-                <PageHeader title="Vendedores" subtitle="Gerencie sua equipe de vendas (vínculo simples)." />
+                <PageHeader title="Vendedores" subtitle="Gerencie sua equipe de vendas." />
                 <PrimaryButton onClick={() => { setEditingSeller({ is_active: true }); setIsModalOpen(true); }}>
                     <Plus size={18} /> Novo Vendedor
                 </PrimaryButton>

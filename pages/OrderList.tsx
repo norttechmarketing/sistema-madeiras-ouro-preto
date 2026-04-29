@@ -3,7 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { storage } from '../services/storage';
 import { Order } from '../types';
-import { Search, Plus, Eye, Calendar, User as UserIcon, Trash2, AlertTriangle, X, CheckCircle } from 'lucide-react';
+import { Search, Plus, Eye, Calendar, User as UserIcon, Trash2, AlertTriangle, X, CheckCircle, FileText } from 'lucide-react';
+import { generateOrderPDF } from '../services/pdfGenerator';
 import PageHeader from '../components/ui/PageHeader';
 import Card from '../components/ui/Card';
 import PrimaryButton from '../components/ui/PrimaryButton';
@@ -13,19 +14,21 @@ const OrderList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<'Todos' | 'Pedido' | 'Orçamento'>('Todos');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isLoadingAction, setIsLoadingAction] = useState(false);
 
   useEffect(() => {
     loadOrders();
   }, []);
 
   const loadOrders = async () => {
-    const ordersData = await storage.getOrders();
+    const ordersData = await storage.getOrders(false);
     const sorted = ordersData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     setOrders(sorted);
   };
 
   const handleDelete = async () => {
     if (!deletingId) return;
+    setIsLoadingAction(true);
     try {
       await storage.deleteOrder(deletingId);
       setOrders(prev => prev.filter(o => o.id !== deletingId));
@@ -33,6 +36,36 @@ const OrderList: React.FC = () => {
     } catch (error: any) {
       console.error("Delete failed:", error);
       alert(`Erro ao excluir: ${error.message}`);
+    } finally {
+      setIsLoadingAction(false);
+    }
+  };
+
+  const handleOpenPDF = async (order: Order) => {
+    setIsLoadingAction(true);
+    try {
+      const client = (await storage.getClients()).find(c => c.id === order.clientId);
+      await generateOrderPDF(order, true, client);
+    } catch (error) {
+      console.error("PDF generation failed:", error);
+      alert("Erro ao gerar PDF.");
+    } finally {
+      setIsLoadingAction(false);
+    }
+  };
+
+  const handleConvertToOrder = async (order: Order) => {
+    if (!window.confirm("Deseja converter este orçamento em pedido?")) return;
+    setIsLoadingAction(true);
+    try {
+      const updatedOrder = { ...order, type: 'Pedido' as const };
+      await storage.saveOrders([updatedOrder]);
+      setOrders(prev => prev.map(o => o.id === order.id ? updatedOrder : o));
+    } catch (error) {
+      console.error("Conversion failed:", error);
+      alert("Erro ao converter orçamento.");
+    } finally {
+      setIsLoadingAction(false);
     }
   };
 
@@ -98,12 +131,12 @@ const OrderList: React.FC = () => {
           <table className="w-full text-left">
             <thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
               <tr>
-                <th className="px-6 py-4">ID / Data</th>
-                <th className="px-6 py-4">Cliente</th>
-                <th className="px-6 py-4">Atendimento</th>
-                <th className="px-6 py-4 text-center">Tipo</th>
-                <th className="px-6 py-4">Total</th>
-                <th className="px-6 py-4 text-right">Ações</th>
+                <th className="px-6 py-4">ID / Data:</th>
+                <th className="px-6 py-4">Cliente:</th>
+                <th className="px-6 py-4">Atendimento:</th>
+                <th className="px-6 py-4 text-center">Tipo:</th>
+                <th className="px-6 py-4">Total:</th>
+                <th className="px-6 py-4 text-right">Ações:</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -112,7 +145,11 @@ const OrderList: React.FC = () => {
                   <td className="px-6 py-5">
                     <div className="font-bold text-sm text-slate-900 tracking-tight">#{order.id.slice(-6).toUpperCase()}</div>
                     <div className="text-[10px] text-slate-400 font-bold flex items-center gap-1 mt-1 uppercase tracking-widest">
-                      <Calendar size={12} /> {new Date(order.date).toLocaleDateString()}
+                      <Calendar size={12} /> 
+                      <div className="flex flex-col">
+                        <span>{new Date(order.date).toLocaleDateString()}</span>
+                        <span className="text-[9px] text-slate-400 lowercase">{new Date(order.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
                     </div>
                   </td>
                   <td className="px-6 py-5">
@@ -134,12 +171,32 @@ const OrderList: React.FC = () => {
                   </td>
                   <td className="px-6 py-5 text-right font-black uppercase tracking-widest text-[10px]">
                     <div className="flex justify-end gap-2">
-                      <Link to={`/orders/${order.id}`} className="text-slate-400 hover:text-slate-900 p-2 rounded-xl hover:bg-slate-100 transition-all">
+                      {order.type === 'Orçamento' && (
+                        <button
+                          onClick={() => handleConvertToOrder(order)}
+                          disabled={isLoadingAction}
+                          className="text-blue-500 hover:text-blue-700 p-2 rounded-xl hover:bg-blue-50 transition-all"
+                          title="Converter em Pedido"
+                        >
+                          <CheckCircle size={18} />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleOpenPDF(order)}
+                        disabled={isLoadingAction}
+                        className="text-slate-400 hover:text-slate-900 p-2 rounded-xl hover:bg-slate-100 transition-all"
+                        title="Ver PDF"
+                      >
+                        <FileText size={18} />
+                      </button>
+                      <Link to={`/orders/${order.id}`} className="text-slate-400 hover:text-slate-900 p-2 rounded-xl hover:bg-slate-100 transition-all" title="Editar">
                         <Eye size={18} />
                       </Link>
                       <button
                         onClick={() => setDeletingId(order.id)}
+                        disabled={isLoadingAction}
                         className="text-slate-400 hover:text-red-600 p-2 rounded-xl hover:bg-red-50 transition-all"
+                        title="Excluir"
                       >
                         <Trash2 size={18} />
                       </button>

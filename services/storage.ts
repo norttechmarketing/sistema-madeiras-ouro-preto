@@ -117,7 +117,6 @@ export const storage = {
     if (!isConfigured || !supabase) return [];
 
     try {
-      // DB: internal_notes | Front: internalNotes
       const { data, error } = await supabase
         .from('clients')
         .select('*')
@@ -136,7 +135,7 @@ export const storage = {
         email: row.email,
         address: row.address,
         type: row.type,
-        internalNotes: row.internal_notes, // Map snake_case to camelCase
+        internalNotes: row.internal_notes,
       }));
     } catch (e) {
       console.error("Unexpected error in getClients:", e);
@@ -148,32 +147,38 @@ export const storage = {
     if (!isConfigured || !supabase) return;
 
     try {
-      const user = await storage.getCurrentUser();
-      if (!user) return;
-
-      const clientsPayload = clients.map(c => ({
-        id: normalizeId(c.id), // Ensure UUID valid
-        name: c.name,
-        document: c.document,
-        phone: c.phone,
-        email: c.email,
-        address: c.address,
-        type: c.type,
-        internal_notes: c.internalNotes, // Map camelCase to snake_case
-        created_at: new Date().toISOString()
-        // user_id REMOVIDO: a tabela clients não possui essa coluna no Supabase
-      }));
-
-      const { error } = await supabase.from('clients').upsert(clientsPayload);
-
-      if (error) {
-        console.error('Supabase Save Error:', error);
-        throw new Error(`Erro ao sincronizar com Supabase: ${error.message}`);
-      }
-
-      // Log actions
       for (const c of clients) {
-        await storage.logAction('UPSERT', 'clients', c.id, null, c);
+        const clientId = normalizeId(c.id);
+        
+        // Fetch before data for audit
+        const { data: beforeData } = await supabase.from('clients').select('*').eq('id', clientId).maybeSingle();
+        const mappedBefore = beforeData ? {
+          id: beforeData.id,
+          name: beforeData.name,
+          document: beforeData.document,
+          phone: beforeData.phone,
+          email: beforeData.email,
+          address: beforeData.address,
+          type: beforeData.type,
+          internalNotes: beforeData.internal_notes
+        } : null;
+
+        const payload = {
+          id: clientId,
+          name: c.name,
+          document: c.document,
+          phone: c.phone,
+          email: c.email,
+          address: c.address,
+          type: c.type,
+          internal_notes: c.internalNotes,
+          created_at: new Date().toISOString()
+        };
+
+        const { error } = await supabase.from('clients').upsert(payload);
+        if (error) throw error;
+
+        await storage.logAction(mappedBefore ? 'UPDATE' : 'INSERT', 'clients', clientId, mappedBefore, c);
       }
     } catch (err) {
       console.error("Safe catch in saveClients:", err);
@@ -182,12 +187,26 @@ export const storage = {
 
   deleteClient: async (id: string) => {
     if (!isConfigured || !supabase) return;
+    
+    // Fetch before data
+    const { data: beforeData } = await supabase.from('clients').select('*').eq('id', id).maybeSingle();
+    const mappedBefore = beforeData ? {
+      id: beforeData.id,
+      name: beforeData.name,
+      document: beforeData.document,
+      phone: beforeData.phone,
+      email: beforeData.email,
+      address: beforeData.address,
+      type: beforeData.type,
+      internalNotes: beforeData.internal_notes
+    } : null;
+
     const { error } = await supabase.from('clients').delete().eq('id', id);
     if (error) {
       console.error('Error deleting client:', error);
       throw new Error(`Erro ao excluir cliente: ${error.message}`);
     }
-    await storage.logAction('DELETE', 'clients', id, null, null);
+    await storage.logAction('DELETE', 'clients', id, mappedBefore, null);
   },
 
   // --- PRODUCTS ---
@@ -217,35 +236,37 @@ export const storage = {
     }
   },
 
-  saveProducts: async (products: Product[], beforeData?: Product) => {
+  saveProducts: async (products: Product[]) => {
     if (!isConfigured || !supabase) return;
 
     try {
-      const payload = products.map(p => {
-        return {
-          id: normalizeId(p.id),
+      for (const p of products) {
+        const productId = normalizeId(p.id);
+        
+        // Fetch before data for audit
+        const { data: beforeData } = await supabase.from('products').select('*').eq('id', productId).maybeSingle();
+
+        const payload = {
+          id: productId,
           code: p.code,
           name: p.name,
           category: p.category,
           price: p.price,
           price_bruto: p.price_bruto,
           price_benef: p.price_benef,
+          cost: p.cost,
           unit: p.unit,
           created_at: new Date().toISOString()
         };
-      });
 
-      const { error } = await supabase.from('products').upsert(payload);
+        const { error } = await supabase.from('products').upsert(payload);
+        if (error) {
+          console.error('Error saving product:', error);
+          throw error;
+        }
 
-      if (error) {
-        console.error('Error saving products:', error);
-        throw new Error(`Erro ao salvar produtos: ${error.message}`);
-      }
-
-      for (const p of products) {
-        // Se temos beforeData, é um UPDATE, senão INSERT
-        const action = beforeData ? 'UPDATE' : 'INSERT';
-        await storage.logAction(action, 'products', p.id, beforeData || null, p);
+        // Action: if beforeData exists, it's an UPDATE, else it's an INSERT
+        await storage.logAction(beforeData ? 'UPDATE' : 'INSERT', 'products', productId, beforeData || null, p);
       }
     } catch (err) {
       console.error("Unexpected error in saveProducts:", err);
@@ -255,42 +276,52 @@ export const storage = {
 
   deleteProduct: async (id: string) => {
     if (!isConfigured || !supabase) return;
-    const { error } = await supabase.from('products').delete().eq('id', id);
-    if (error) {
-      console.error('Error deleting product:', error);
-      throw new Error(`Erro ao excluir product: ${error.message}`);
+    
+    try {
+      // 1. Limpar referências em itens de pedidos e orçamentos para evitar erro de FK
+      // Como o item já tem o snapshot (descrição, categoria, preço), ele continuará aparecendo corretamente.
+      await supabase.from('order_items').update({ product_id: null }).eq('product_id', id);
+      await supabase.from('quote_items').update({ product_id: null }).eq('product_id', id);
+
+      // 2. Fetch data para log de auditoria
+      const { data: beforeData } = await supabase.from('products').select('*').eq('id', id).maybeSingle();
+      
+      // 3. Excluir o produto
+      const { error } = await supabase.from('products').delete().eq('id', id);
+      if (error) {
+        console.error('Error deleting product:', error);
+        throw new Error(`Erro ao excluir produto: ${error.message}`);
+      }
+      await storage.logAction('DELETE', 'products', id, beforeData || null, null);
+    } catch (err) {
+      console.error("Error in deleteProduct:", err);
+      throw err;
     }
-    await storage.logAction('DELETE', 'products', id, null, null);
   },
 
   // --- ORDERS ---
-  getOrders: async (): Promise<Order[]> => {
+  getOrders: async (includeItems = true): Promise<Order[]> => {
     if (!isConfigured || !supabase) return [];
 
     try {
       const user = await storage.getCurrentUser();
       if (!user) return [];
 
-      let query = supabase
-        .from('orders')
-        .select('*, items:order_items(*)'); // Single items table for now
+      const [ordersResult, quotesResult] = await Promise.all([
+        supabase.from('orders').select(includeItems ? '*, items:order_items(*)' : '*').order('date', { ascending: false }),
+        supabase.from('quotes').select(includeItems ? '*, items:quote_items(*)' : '*').order('date', { ascending: false })
+      ]);
 
-      // Role Based Access Control for fetching
-      if (user.role !== 'admin') {
-        query = query.eq('seller_id', user.id);
-      }
+      if (ordersResult.error) console.error('Error fetching orders:', ordersResult.error);
+      if (quotesResult.error) console.error('Error fetching quotes:', quotesResult.error);
 
-      query = query.order('date', { ascending: false });
+      const allRows = [...(ordersResult.data || []), ...(quotesResult.data || [])];
+      
+      const filteredRows = user.role === 'admin' 
+        ? allRows 
+        : allRows.filter(r => r.seller_id === user.id);
 
-      const { data, error } = await query;
-
-      if (error) {
-        console.error('Error fetching orders:', error);
-        return [];
-      }
-
-      // MAP DB (snake_case) -> APP (camelCase)
-      return (data || []).map((row: any) => {
+      return filteredRows.map((row: any) => {
         const dbItems = row.items || [];
         
         return {
@@ -301,7 +332,7 @@ export const storage = {
           sellerName: row.seller_name || row.sellerName,
           date: row.date,
           status: row.status,
-          type: row.type,
+          type: row.type || (row.items ? (row.items[0]?.order_id ? 'Pedido' : 'Orçamento') : 'Pedido'),
           subtotal: Number(row.subtotal || 0),
           totalDiscount: Number(row.total_discount || row.totalDiscount || 0),
           globalDiscountType: row.discount_type || row.globalDiscountType,
@@ -314,7 +345,7 @@ export const storage = {
           shippingValue: Number(row.shipping_value || row.shippingValue || 0),
           deliveryDate: row.delivery_date || row.deliveryDate,
           createdAt: row.created_at || row.createdAt || new Date().toISOString(),
-          items: dbItems.map((item: any) => ({
+          items: includeItems ? dbItems.map((item: any) => ({
             id: item.id,
             productId: item.product_id || item.productId,
             description: item.description,
@@ -328,9 +359,9 @@ export const storage = {
             comprimento: item.comprimento,
             largura: item.largura,
             isBeneficiado: item.is_beneficiado !== undefined ? item.is_beneficiado : item.isBeneficiado
-          }))
+          })) : []
         };
-      });
+      }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     } catch (e) {
       console.error("Unexpected error in getOrders:", e);
       return [];
@@ -347,10 +378,16 @@ export const storage = {
 
       for (const order of orders) {
         const orderId = normalizeId(order.id);
+        const isQuote = order.type === 'Orçamento';
+        const headerTable = isQuote ? 'quotes' : 'orders';
+        const itemsTable = isQuote ? 'quote_items' : 'order_items';
+        
+        // Fetch before data for audit
+        const { data: beforeData } = await client.from(headerTable).select(`*, items:${itemsTable}(*)`).eq('id', orderId).maybeSingle();
+        
         const sellerId = order.sellerId || user.id;
         const sellerName = order.sellerName || user.name;
 
-        // 1. SALVAR CABEÇALHO (Header)
         const headerPayload = {
           id: orderId,
           client_id: order.clientId,
@@ -362,37 +399,32 @@ export const storage = {
           type: order.type,
           subtotal: order.subtotal,
           total_discount: order.totalDiscount,
-          discount_type: order.globalDiscountType,
+          discount_type: order.globalDiscountType || 'fixed',
           discount_value: order.globalDiscountValue,
           discount_amount: order.globalDiscountAmount,
           total: order.total,
           internal_notes: order.internalNotes,
-          customer_notes: order.customerNotes,
+          ...(headerTable === 'orders' ? { customer_notes: order.customerNotes } : {}),
           payment_method: order.paymentMethod,
           shipping_value: order.shippingValue,
           delivery_date: order.deliveryDate,
           created_at: order.createdAt || new Date().toISOString()
         };
 
-        const headerResult: any = await withTimeout(() => client.from('orders').upsert(headerPayload), 20000, { retry: true });
+        const headerResult: any = await withTimeout(() => client.from(headerTable).upsert(headerPayload), 20000, { retry: true });
         if (headerResult?.error) throw new Error(`Erro no cabeçalho: ${headerResult.error.message}`);
 
-        // 2. SALVAR ITENS (Items)
-        const itemsTable = 'order_items'; // Mantendo tabela única até que a outra seja criada
-        
-        // Limpar registros antigos para evitar duplicidade
-        await client.from('order_items').delete().eq('order_id', orderId);
+        await client.from(itemsTable).delete().eq('order_id', orderId);
 
         if (order.items && order.items.length > 0) {
           const itemsPayload = order.items.map(item => ({
-            // NÃO enviar o campo 'id'. Deixar o Supabase gerar automaticamente.
             order_id: orderId,
             product_id: item.productId,
             description: item.description,
             quantity: item.quantity,
             unit_price: item.unitPrice,
             unit: item.unit,
-            discount_type: item.discountType,
+            discount_type: item.discountType || 'fixed',
             discount_value: item.discountValue,
             total: item.total,
             category: item.category,
@@ -405,14 +437,13 @@ export const storage = {
           if (itemsResult?.error) throw new Error(`Erro nos itens: ${itemsResult.error.message}`);
         }
 
-        await storage.logAction('UPSERT', 'orders', orderId, null, order);
+        await storage.logAction(beforeData ? 'UPDATE' : 'INSERT', headerTable, orderId, beforeData, order);
       }
     } catch (err) {
       console.error("Unexpected error in saveOrders:", err);
       throw err;
     }
   },
-
 
   deleteOrder: async (id: string) => {
     if (!isConfigured || !supabase) return;
@@ -421,34 +452,39 @@ export const storage = {
       const user = await storage.getCurrentUser();
       if (!user) throw new Error("Não autenticado");
 
-      // Permission Check
-      if (user.role !== 'admin') {
-        const { data: existing, error } = await supabase
-          .from('orders')
-          .select('seller_id') // Check snake_case column
-          .eq('id', id)
-          .single();
-
-        if (error) {
-          console.error("Error fetching order for deletion check:", error);
-          throw new Error("Erro ao verificar permissão.");
-        }
-
-        if (existing && existing.seller_id !== user.id) {
-          throw new Error("Permissão negada: Você só pode excluir seus próprios pedidos.");
+      // Try orders first
+      let table: 'orders' | 'quotes' = 'orders';
+      let itemsTable: 'order_items' | 'quote_items' = 'order_items';
+      
+      let { data: beforeData } = await supabase.from('orders').select('*, items:order_items(*)').eq('id', id).maybeSingle();
+      
+      if (!beforeData) {
+        // Try quotes
+        const quoteResult = await supabase.from('quotes').select('*, items:quote_items(*)').eq('id', id).maybeSingle();
+        if (quoteResult.data) {
+          beforeData = quoteResult.data;
+          table = 'quotes';
+          itemsTable = 'quote_items';
         }
       }
 
-      // --- DELETE ORDER ITEMS ---
-      await supabase.from('order_items').delete().eq('order_id', id);
+      if (!beforeData) throw new Error("Documento não encontrado.");
 
-      // --- DELETE HEADER ---
-      const { error } = await supabase.from('orders').delete().eq('id', id);
+      if (user.role !== 'admin') {
+        if (beforeData.seller_id !== user.id) {
+          throw new Error("Permissão negada: Você só pode excluir seus próprios documentos.");
+        }
+      }
+
+      await supabase.from(itemsTable).delete().eq('order_id', id);
+      const { error } = await supabase.from(table).delete().eq('id', id);
+      
       if (error) {
-        console.error('Error deleting order:', error);
+        console.error(`Error deleting ${table}:`, error);
         throw error;
       }
-      await storage.logAction('DELETE', 'orders', id, null, null);
+      
+      await storage.logAction('DELETE', table, id, beforeData, null);
     } catch (err) {
       console.error("Unexpected error in deleteOrder:", err);
       throw err;
@@ -532,8 +568,13 @@ export const storage = {
   saveSeller: async (seller: any) => {
     if (!isConfigured || !supabase) return;
     try {
+      const sellerId = normalizeId(seller.id);
+      
+      // Fetch before data for audit
+      const { data: beforeData } = await supabase.from('sellers').select('*').eq('id', sellerId).maybeSingle();
+
       const payload = {
-        id: normalizeId(seller.id),
+        id: sellerId,
         name: seller.name,
         whatsapp: seller.whatsapp,
         is_active: seller.is_active !== undefined ? seller.is_active : true,
@@ -542,7 +583,8 @@ export const storage = {
 
       const { error } = await supabase.from('sellers').upsert(payload);
       if (error) throw error;
-      await storage.logAction('UPSERT', 'sellers', payload.id, null, seller);
+      
+      await storage.logAction(beforeData ? 'UPDATE' : 'INSERT', 'sellers', sellerId, beforeData || null, seller);
     } catch (err) {
       console.error("Error saving seller:", err);
       throw err;
@@ -551,12 +593,21 @@ export const storage = {
 
   deleteSeller: async (id: string) => {
     if (!isConfigured || !supabase) return;
-    const { error } = await supabase.from('sellers').delete().eq('id', id);
-    if (error) {
-      console.error('Error deleting seller:', error);
-      throw new Error(`Erro ao excluir vendedor: ${error.message}`);
+    
+    try {
+      // Fetch before data
+      const { data: beforeData } = await supabase.from('sellers').select('*').eq('id', id).maybeSingle();
+
+      const { error } = await supabase.from('sellers').delete().eq('id', id);
+      if (error) {
+        console.error('Error deleting seller:', error);
+        throw new Error(`Erro ao excluir vendedor: ${error.message}`);
+      }
+      await storage.logAction('DELETE', 'sellers', id, beforeData || null, null);
+    } catch (err) {
+      console.error("Error in deleteSeller:", err);
+      throw err;
     }
-    await storage.logAction('DELETE', 'sellers', id, null, null);
   },
 
   // --- AUDIT LOGS ---

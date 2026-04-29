@@ -164,10 +164,10 @@ const Clients: React.FC = () => {
           <table className="w-full text-left">
             <thead className="bg-slate-50/50 text-slate-400 text-[10px] uppercase font-black tracking-widest">
               <tr>
-                <th className="px-6 py-4">Nome / Razão Social</th>
-                <th className="px-6 py-4">CPF / CNPJ</th>
-                <th className="px-6 py-4">WhatsApp</th>
-                <th className="px-6 py-4 text-right">Ações</th>
+                <th className="px-6 py-4">Nome / Razão Social:</th>
+                <th className="px-6 py-4">CPF / CNPJ:</th>
+                <th className="px-6 py-4">WhatsApp:</th>
+                <th className="px-6 py-4 text-right">Ações:</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -232,7 +232,7 @@ const Clients: React.FC = () => {
           <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto !p-0 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
               <div>
-                <h3 className="text-xl font-bold text-slate-900">{editingClient ? 'Editar Cliente' : 'Novo Cliente'}</h3>
+                <h3 className="text-xl font-bold text-slate-900">{editingClient ? 'Editar Cliente:' : 'Novo Cliente:'}</h3>
                 {!editingClient && <p className="text-xs text-slate-500 font-medium uppercase tracking-widest mt-1">Preencha as informações do cliente.</p>}
               </div>
               <button onClick={closeModal} className="text-slate-400 hover:text-slate-900 p-2 hover:bg-slate-100 rounded-xl transition-all">
@@ -243,7 +243,7 @@ const Clients: React.FC = () => {
             <form onSubmit={handleSave} className="p-8 space-y-6">
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-slate-700 ml-1">Tipo</label>
+                  <label className="text-sm font-medium text-slate-700 ml-1">Tipo:</label>
                   <select
                     className="w-full p-2.5 border border-[#d9d7d8] rounded-xl text-sm font-medium focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none"
                     value={formData.type}
@@ -254,10 +254,11 @@ const Clients: React.FC = () => {
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-slate-700 ml-1">CPF / CNPJ</label>
+                  <label className="text-sm font-medium text-slate-700 ml-1">CPF / CNPJ:</label>
                   <input
                     type="text"
                     required
+                    placeholder="000.000.000-00 ou 00.000.000/0000-00"
                     className="w-full p-2.5 border border-[#d9d7d8] rounded-xl text-sm font-medium focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none"
                     value={formData.document}
                     onChange={(e) => setFormData({ ...formData, document: e.target.value })}
@@ -266,10 +267,11 @@ const Clients: React.FC = () => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-slate-700 ml-1">Nome Completo / Razão Social</label>
+                <label className="text-sm font-medium text-slate-700 ml-1">Nome Completo / Razão Social:</label>
                 <input
                   type="text"
                   required
+                  placeholder="Ex: João Silva ou Empresa LTDA"
                   className="w-full p-2.5 border border-[#d9d7d8] rounded-xl text-sm font-medium focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -278,17 +280,18 @@ const Clients: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-slate-700 ml-1">WhatsApp</label>
+                  <label className="text-sm font-medium text-slate-700 ml-1">WhatsApp:</label>
                   <input
                     type="text"
                     required
+                    placeholder="(00) 00000-0000"
                     className="w-full p-2.5 border border-[#d9d7d8] rounded-xl text-sm font-medium focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-slate-700 ml-1">CEP</label>
+                  <label className="text-sm font-medium text-slate-700 ml-1">CEP:</label>
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -310,7 +313,7 @@ const Clients: React.FC = () => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-slate-700 ml-1">Endereço Completo</label>
+                <label className="text-sm font-medium text-slate-700 ml-1">Endereço Completo:</label>
                 <input
                   type="text"
                   placeholder="Rua, número, bairro, cidade - UF"
@@ -321,7 +324,7 @@ const Clients: React.FC = () => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-slate-700 ml-1">Observações</label>
+                <label className="text-sm font-medium text-slate-700 ml-1">Observações:</label>
                 <textarea
                   className="w-full p-3 border border-[#d9d7d8] rounded-xl h-24 text-sm font-medium focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none resize-none"
                   value={formData.internalNotes}
@@ -337,7 +340,7 @@ const Clients: React.FC = () => {
                   disabled={isSaving}
                   className="px-8"
                 >
-                  {isSaving ? 'Salvando...' : 'Confirmar Cadastro'}
+                  {isSaving ? 'Salvando...' : 'Salvar'}
                 </PrimaryButton>
               </div>
             </form>
