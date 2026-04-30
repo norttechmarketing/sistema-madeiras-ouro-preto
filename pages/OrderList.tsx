@@ -58,9 +58,20 @@ const OrderList: React.FC = () => {
     if (!window.confirm("Deseja converter este orçamento em pedido?")) return;
     setIsLoadingAction(true);
     try {
-      const updatedOrder = { ...order, type: 'Pedido' as const };
+      // Validar vendedor antes de converter
+      const sellers = await storage.getSellers(true);
+      const validSeller = sellers.find(s => s.id === order.sellerId);
+      
+      const updatedOrder: Order = { 
+        ...order, 
+        type: 'Pedido',
+        sellerId: validSeller ? validSeller.id : null,
+        sellerName: validSeller ? validSeller.name : (order.sellerName || '')
+      };
+      
       await storage.saveOrders([updatedOrder]);
       setOrders(prev => prev.map(o => o.id === order.id ? updatedOrder : o));
+      alert('Orçamento convertido com sucesso!');
     } catch (error) {
       console.error("Conversion failed:", error);
       alert("Erro ao converter orçamento.");

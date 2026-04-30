@@ -385,8 +385,8 @@ export const storage = {
         // Fetch before data for audit
         const { data: beforeData } = await client.from(headerTable).select(`*, items:${itemsTable}(*)`).eq('id', orderId).maybeSingle();
         
-        const sellerId = order.sellerId || user.id;
-        const sellerName = order.sellerName || user.name;
+        const sellerId = order.sellerId || null;
+        const sellerName = order.sellerName || '';
 
         const headerPayload = {
           id: orderId,
@@ -411,14 +411,24 @@ export const storage = {
           created_at: order.createdAt || new Date().toISOString()
         };
 
-        const headerResult: any = await withTimeout(() => client.from(headerTable).upsert(headerPayload), 20000, { retry: true });
+        const headerResult: any = await withTimeout(() => 
+          client.from(headerTable).upsert(headerPayload).select().single(), 
+          20000, { retry: true }
+        );
+        
         if (headerResult?.error) throw new Error(`Erro no cabeçalho: ${headerResult.error.message}`);
+        
+        const savedHeader = headerResult.data;
+        if (!savedHeader?.id) throw new Error("Erro crítico: ID do documento não foi retornado pelo banco.");
 
-        await client.from(itemsTable).delete().eq('order_id', orderId);
+        const fkField = isQuote ? 'quote_id' : 'order_id';
+
+        // Remove itens antigos usando o ID retornado e campo correto
+        await client.from(itemsTable).delete().eq(fkField, savedHeader.id);
 
         if (order.items && order.items.length > 0) {
           const itemsPayload = order.items.map(item => ({
-            order_id: orderId,
+            [fkField]: savedHeader.id,
             product_id: item.productId,
             description: item.description,
             quantity: item.quantity,
@@ -437,7 +447,7 @@ export const storage = {
           if (itemsResult?.error) throw new Error(`Erro nos itens: ${itemsResult.error.message}`);
         }
 
-        await storage.logAction(beforeData ? 'UPDATE' : 'INSERT', headerTable, orderId, beforeData, order);
+        await storage.logAction(beforeData ? 'UPDATE' : 'INSERT', headerTable, savedHeader.id, beforeData, order);
       }
     } catch (err) {
       console.error("Unexpected error in saveOrders:", err);
@@ -476,7 +486,8 @@ export const storage = {
         }
       }
 
-      await supabase.from(itemsTable).delete().eq('order_id', id);
+      const fkField = table === 'quotes' ? 'quote_id' : 'order_id';
+      await supabase.from(itemsTable).delete().eq(fkField, id);
       const { error } = await supabase.from(table).delete().eq('id', id);
       
       if (error) {

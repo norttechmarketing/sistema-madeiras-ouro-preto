@@ -160,14 +160,6 @@ const OrderEditor: React.FC = () => {
       if (id && id !== 'new') {
         await loadOrderData(id);
       } else {
-        const currentUser = await storage.getCurrentUser();
-        if (currentUser && !selectedSellerId) {
-          // Só auto-seleciona se o usuário for um vendedor válido
-          const isSeller = (activeSellers || []).find((v: any) => v.id === currentUser.id);
-          if (isSeller) {
-            setSelectedSellerId(currentUser.id);
-          }
-        }
         if (typeParam === 'Orçamento' || typeParam === 'Pedido') setOrderType(typeParam);
       }
     };
@@ -296,12 +288,9 @@ const OrderEditor: React.FC = () => {
 
     if (isSaving) return null;
 
-    // Validar Vendedor (seller_id)
-    const seller = vendedores.find(v => v.id === selectedSellerId);
-    if (!selectedSellerId || !seller) {
-      alert('Selecione um vendedor válido antes de salvar/exportar.');
-      return null;
-    }
+    const validSeller = vendedores.find(v => v.id === selectedSellerId);
+    const finalSellerId = validSeller ? validSeller.id : null;
+    const finalSellerName = validSeller ? validSeller.name : '';
 
     setIsSaving(true);
 
@@ -309,8 +298,8 @@ const OrderEditor: React.FC = () => {
       id: id === 'new' ? uuid() : id!,
       clientId: selectedClient.id,
       clientName: selectedClient.name,
-      sellerId: selectedSellerId || undefined,
-      sellerName: seller?.name,
+      sellerId: finalSellerId || undefined, // undefined will be converted to null in storage.ts or handled correctly
+      sellerName: finalSellerName,
       date: new Date().toISOString(),
       status: orderStatus,
       type: typeOverride || orderType,
@@ -366,13 +355,6 @@ const OrderEditor: React.FC = () => {
   const handleWhatsApp = async () => {
     if (isSendingWhatsApp || isSaving || isExporting) return;
 
-    // Validar Vendedor (seller_id)
-    const seller = vendedores.find(v => v.id === selectedSellerId);
-    if (!selectedSellerId || !seller) {
-      alert('Selecione um vendedor válido antes de enviar pelo WhatsApp.');
-      return;
-    }
-
     setIsSendingWhatsApp(true);
 
     try {
@@ -381,13 +363,14 @@ const OrderEditor: React.FC = () => {
       if (id === 'new') {
         currentOrder = await saveOrder(true);
       } else {
-        const seller = vendedores.find(v => v.id === selectedSellerId);
+        const validSeller = vendedores.find(v => v.id === selectedSellerId);
         currentOrder = {
           id: id!,
           clientName: selectedClient?.name || 'Cliente',
           items: orderItems,
           total: total,
-          sellerName: seller?.name || 'Vendedor',
+          sellerId: validSeller ? validSeller.id : null,
+          sellerName: validSeller ? validSeller.name : 'Vendedor',
           type: orderType
         };
       }
@@ -427,13 +410,6 @@ const OrderEditor: React.FC = () => {
   const handlePrint = async () => {
     if (isExporting) return;
 
-    // Validar Vendedor (seller_id)
-    const seller = vendedores.find(v => v.id === selectedSellerId);
-    if (!selectedSellerId || !seller) {
-      alert('Selecione um vendedor válido antes de exportar.');
-      return;
-    }
-
     setIsExporting(true);
 
     try {
@@ -442,13 +418,13 @@ const OrderEditor: React.FC = () => {
       if (id === 'new') {
         currentOrder = await saveOrder(true);
       } else {
-        const seller = vendedores.find(v => v.id === selectedSellerId);
+        const validSeller = vendedores.find(v => v.id === selectedSellerId);
         currentOrder = {
           id: id!,
           clientId: selectedClient?.id || '',
           clientName: selectedClient?.name || 'Cliente',
-          sellerId: selectedSellerId,
-          sellerName: seller?.name || 'Vendedor',
+          sellerId: validSeller ? validSeller.id : null,
+          sellerName: validSeller ? validSeller.name : 'Vendedor',
           date: new Date().toISOString(),
           status: orderStatus,
           type: orderType,
