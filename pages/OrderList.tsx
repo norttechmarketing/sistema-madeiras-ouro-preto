@@ -44,11 +44,19 @@ const OrderList: React.FC = () => {
   const handleOpenPDF = async (order: Order) => {
     setIsLoadingAction(true);
     try {
-      const client = (await storage.getClients()).find(c => c.id === order.clientId);
-      await generateOrderPDF(order, true, client);
-    } catch (error) {
+      const fullOrder = await storage.getOrderById(order.id);
+      if (!fullOrder) throw new Error("Não foi possível carregar os dados completos do pedido.");
+      
+      if (!fullOrder.items || fullOrder.items.length === 0) {
+        alert("Atenção: Este documento não possui itens cadastrados.");
+        return;
+      }
+
+      const client = (await storage.getClients()).find(c => c.id === fullOrder.clientId);
+      await generateOrderPDF(fullOrder, true, client);
+    } catch (error: any) {
       console.error("PDF generation failed:", error);
-      alert("Erro ao gerar PDF.");
+      alert(`Erro ao gerar PDF: ${error.message}`);
     } finally {
       setIsLoadingAction(false);
     }
@@ -58,23 +66,45 @@ const OrderList: React.FC = () => {
     if (!window.confirm("Deseja converter este orçamento em pedido?")) return;
     setIsLoadingAction(true);
     try {
-      // Validar vendedor antes de converter
+      // 1. Carregar oramento completo
+      const fullQuote = await storage.getOrderById(order.id);
+      if (!fullQuote) throw new Error("Orçamento não encontrado.");
+
+      // 2. Verificar se j existe um pedido vinculado a este oramento
+      const allOrders = await storage.getOrders(false);
+      const existingOrder = allOrders.find(o => o.type === 'Pedido' && o.origin_quote_id === order.id);
+
+      if (existingOrder) {
+        alert("Este orçamento já foi convertido anteriormente. Abrindo o pedido existente...");
+        // @ts-ignore
+        window.location.href = `#/orders/${existingOrder.id}`;
+        return;
+      }
+
+      // 3. Validar vendedor
       const sellers = await storage.getSellers(true);
-      const validSeller = sellers.find(s => s.id === order.sellerId);
+      const validSeller = sellers.find(s => s.id === fullQuote.sellerId);
       
+      const newOrderId = storage.uuid();
       const updatedOrder: Order = { 
-        ...order, 
+        ...fullQuote, 
+        id: newOrderId,
         type: 'Pedido',
+        status: 'Rascunho',
+        origin_quote_id: fullQuote.id,
         sellerId: validSeller ? validSeller.id : null,
-        sellerName: validSeller ? validSeller.name : (order.sellerName || '')
+        sellerName: validSeller ? validSeller.name : (fullQuote.sellerName || ''),
+        createdAt: new Date().toISOString()
       };
       
       await storage.saveOrders([updatedOrder]);
-      setOrders(prev => prev.map(o => o.id === order.id ? updatedOrder : o));
+      await loadOrders();
       alert('Orçamento convertido com sucesso!');
-    } catch (error) {
+      // @ts-ignore
+      window.location.href = `#/orders/${newOrderId}`;
+    } catch (error: any) {
       console.error("Conversion failed:", error);
-      alert("Erro ao converter orçamento.");
+      alert(`Erro ao converter orçamento: ${error.message}`);
     } finally {
       setIsLoadingAction(false);
     }

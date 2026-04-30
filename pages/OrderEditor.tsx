@@ -105,29 +105,30 @@ const OrderEditor: React.FC = () => {
 
   // Funções de Carga de Dados
   const loadBaseData = async () => {
-    if (clients.length > 0 && products.length > 0 && vendedores.length > 0) return;
     try {
-      const [c, p, s] = await Promise.all([
-        storage.getClients(),
-        storage.getProducts(),
-        storage.getSellers(true)
-      ]);
-      setClients(c);
-      setProducts(p);
-      setVendedores(s);
-      return s; // Retorna os vendedores para uso imediato no init
+      const promises: Promise<any>[] = [];
+      
+      if (clients.length === 0) promises.push(storage.getClients().then(setClients));
+      if (products.length === 0) promises.push(storage.getProducts().then(setProducts));
+      
+      // Sempre recarrega vendedores se estiver vazio para garantir que apaream no select
+      let currentSellers = vendedores;
+      if (vendedores.length === 0) {
+        currentSellers = await storage.getSellers(true);
+        setVendedores(currentSellers);
+      }
+      
+      await Promise.all(promises);
+      return currentSellers;
     } catch (err) {
       console.error("Erro ao carregar dados base:", err);
-      return [];
+      return vendedores;
     }
   };
 
   const loadOrderData = async (orderId: string) => {
     try {
-      const ordersData = await storage.getOrders();
-      setAllOrders(ordersData);
-      
-      const existing = ordersData.find(o => o.id === orderId);
+      const existing = await storage.getOrderById(orderId);
       if (existing) {
         setOrderType(existing.type);
         setOrderStatus(existing.status);
@@ -325,7 +326,7 @@ const OrderEditor: React.FC = () => {
       if (!silent) {
         alert('Salvo com sucesso!');
         if (id === 'new') {
-          navigate(`/orders/${orderData.id}`);
+          navigate(`/orders/${orderData.id}`, { replace: true });
         }
       }
       return orderData;
@@ -339,26 +340,49 @@ const OrderEditor: React.FC = () => {
   };
 
   const handleConvertToOrder = async () => {
+    if (orderType === 'Pedido') return;
     if (!window.confirm("Deseja converter este orçamento em pedido?")) return;
     
+    setIsSaving(true);
     try {
+      // Verificar se j existe pedido vinculado
+      const allOrders = await storage.getOrders(false);
+      const existing = allOrders.find(o => o.type === 'Pedido' && o.origin_quote_id === id);
+      
+      if (existing) {
+        alert("Este orçamento já possui um pedido vinculado.");
+        navigate(`/orders/${existing.id}`);
+        return;
+      }
+
       const saved = await saveOrder(true, 'Pedido');
       if (saved) {
+        // Vincula o oramento original
+        saved.origin_quote_id = id === 'new' ? undefined : id;
+        await storage.saveOrders([{ ...saved, type: 'Pedido' }]);
+        
         setOrderType('Pedido');
         alert('Orçamento convertido em Pedido com sucesso!');
+        navigate(`/orders/${saved.id}`);
       }
     } catch (err) {
       console.error("Error converting quote:", err);
       alert("Erro ao converter orçamento.");
+    } finally {
+      setIsSaving(false);
     }
   };
   const handleWhatsApp = async () => {
     if (isSendingWhatsApp || isSaving || isExporting) return;
-
     setIsSendingWhatsApp(true);
 
     try {
-      // Se for novo, precisa salvar para gerar ID. Se já existe, usa o state.
+      if (!orderItems.length) {
+        alert("Adicione ao menos um item antes de enviar.");
+        return;
+      }
+
+      // Se for novo ou tiver mudanas (simulado), salva. Mas se j existe e  apenas visualizao, no salva de novo.
       let currentOrder: any = null;
       if (id === 'new') {
         currentOrder = await saveOrder(true);
@@ -408,12 +432,16 @@ const OrderEditor: React.FC = () => {
     }
   };
   const handlePrint = async () => {
-    if (isExporting) return;
-
+    if (isExporting || isSaving) return;
     setIsExporting(true);
 
     try {
-      // Se for novo, salva antes para garantir ID e persistência, mas sem bloquear com alert
+      if (!orderItems.length) {
+        alert("Adicione ao menos um item antes de exportar.");
+        return;
+      }
+
+      // Se for novo, salva antes. Se j existe, usa o state atual (que j deve estar sincronizado ou ser o que o usurio quer ver)
       let currentOrder: any = null;
       if (id === 'new') {
         currentOrder = await saveOrder(true);
@@ -442,8 +470,8 @@ const OrderEditor: React.FC = () => {
         };
       }
 
-      if (!currentOrder && id === 'new') {
-        throw new Error("Não foi possível salvar o pedido antes de exportar.");
+      if (!currentOrder) {
+        throw new Error("Não foi possível preparar os dados para o PDF.");
       }
 
       await generateOrderPDF(currentOrder, true, selectedClient || undefined);

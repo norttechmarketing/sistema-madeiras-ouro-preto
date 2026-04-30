@@ -147,41 +147,28 @@ export const storage = {
     if (!isConfigured || !supabase) return;
 
     try {
-      for (const c of clients) {
-        const clientId = normalizeId(c.id);
-        
-        // Fetch before data for audit
-        const { data: beforeData } = await supabase.from('clients').select('*').eq('id', clientId).maybeSingle();
-        const mappedBefore = beforeData ? {
-          id: beforeData.id,
-          name: beforeData.name,
-          document: beforeData.document,
-          phone: beforeData.phone,
-          email: beforeData.email,
-          address: beforeData.address,
-          type: beforeData.type,
-          internalNotes: beforeData.internal_notes
-        } : null;
+      const payloads = clients.map(c => ({
+        id: normalizeId(c.id),
+        name: c.name,
+        document: c.document,
+        phone: c.phone,
+        email: c.email,
+        address: c.address,
+        type: c.type,
+        internal_notes: c.internalNotes,
+        created_at: new Date().toISOString()
+      }));
 
-        const payload = {
-          id: clientId,
-          name: c.name,
-          document: c.document,
-          phone: c.phone,
-          email: c.email,
-          address: c.address,
-          type: c.type,
-          internal_notes: c.internalNotes,
-          created_at: new Date().toISOString()
-        };
+      const { error } = await supabase.from('clients').upsert(payloads);
+      if (error) throw error;
 
-        const { error } = await supabase.from('clients').upsert(payload);
-        if (error) throw error;
-
-        await storage.logAction(mappedBefore ? 'UPDATE' : 'INSERT', 'clients', clientId, mappedBefore, c);
+      // Log action for the first one as representative or skip for performance
+      if (payloads.length > 0) {
+        await storage.logAction('UPSERT', 'clients', payloads[0].id, null, clients[0]);
       }
     } catch (err) {
-      console.error("Safe catch in saveClients:", err);
+      console.error("Error in saveClients:", err);
+      throw err;
     }
   },
 
@@ -240,36 +227,27 @@ export const storage = {
     if (!isConfigured || !supabase) return;
 
     try {
-      for (const p of products) {
-        const productId = normalizeId(p.id);
-        
-        // Fetch before data for audit
-        const { data: beforeData } = await supabase.from('products').select('*').eq('id', productId).maybeSingle();
+      const payloads = products.map(p => ({
+        id: normalizeId(p.id),
+        code: p.code,
+        name: p.name,
+        category: p.category,
+        price: p.price,
+        price_bruto: p.price_bruto,
+        price_benef: p.price_benef,
+        cost: p.cost,
+        unit: p.unit,
+        created_at: new Date().toISOString()
+      }));
 
-        const payload = {
-          id: productId,
-          code: p.code,
-          name: p.name,
-          category: p.category,
-          price: p.price,
-          price_bruto: p.price_bruto,
-          price_benef: p.price_benef,
-          cost: p.cost,
-          unit: p.unit,
-          created_at: new Date().toISOString()
-        };
+      const { error } = await supabase.from('products').upsert(payloads);
+      if (error) throw error;
 
-        const { error } = await supabase.from('products').upsert(payload);
-        if (error) {
-          console.error('Error saving product:', error);
-          throw error;
-        }
-
-        // Action: if beforeData exists, it's an UPDATE, else it's an INSERT
-        await storage.logAction(beforeData ? 'UPDATE' : 'INSERT', 'products', productId, beforeData || null, p);
+      if (payloads.length > 0) {
+        await storage.logAction('UPSERT', 'products', payloads[0].id, null, products[0]);
       }
     } catch (err) {
-      console.error("Unexpected error in saveProducts:", err);
+      console.error("Error in saveProducts:", err);
       throw err;
     }
   },
@@ -368,22 +346,76 @@ export const storage = {
     }
   },
 
+  getOrderById: async (id: string): Promise<Order | null> => {
+    if (!isConfigured || !supabase) return null;
+    try {
+      // Tenta buscar em orders primeiro
+      let result = await supabase.from('orders').select('*, items:order_items(*)').eq('id', id).maybeSingle();
+      
+      // Se não achar, tenta em quotes
+      if (!result.data) {
+        result = await supabase.from('quotes').select('*, items:quote_items(*)').eq('id', id).maybeSingle();
+      }
+
+      if (!result.data) return null;
+
+      const row = result.data;
+      const dbItems = row.items || [];
+      
+      return {
+        id: row.id,
+        clientId: row.client_id || row.clientId,
+        clientName: row.client_name || row.clientName,
+        sellerId: row.seller_id || row.sellerId,
+        sellerName: row.seller_name || row.sellerName,
+        date: row.date,
+        status: row.status,
+        type: row.type || (row.items && row.items[0]?.order_id ? 'Pedido' : 'Orçamento'),
+        subtotal: Number(row.subtotal || 0),
+        totalDiscount: Number(row.total_discount || row.totalDiscount || 0),
+        globalDiscountType: row.discount_type || row.globalDiscountType,
+        globalDiscountValue: Number(row.discount_value || row.globalDiscountValue || 0),
+        globalDiscountAmount: Number(row.discount_amount || row.globalDiscountAmount || 0),
+        total: Number(row.total || 0),
+        internalNotes: row.internal_notes || row.internalNotes,
+        customerNotes: row.customer_notes || row.customerNotes,
+        paymentMethod: row.payment_method || row.paymentMethod,
+        shippingValue: Number(row.shipping_value || row.shippingValue || 0),
+        deliveryDate: row.delivery_date || row.deliveryDate,
+        origin_quote_id: row.origin_quote_id,
+        createdAt: row.created_at || row.createdAt || new Date().toISOString(),
+        items: dbItems.map((item: any) => ({
+          id: item.id,
+          productId: item.product_id || item.productId,
+          description: item.description,
+          quantity: Number(item.quantity || 0),
+          unitPrice: Number(item.unit_price || item.unitPrice || 0),
+          unit: item.unit,
+          discountType: item.discount_type || item.discountType,
+          discountValue: Number(item.discount_value || item.discountValue || 0),
+          total: Number(item.total || 0),
+          category: item.category,
+          comprimento: item.comprimento,
+          largura: item.largura,
+          isBeneficiado: item.is_beneficiado !== undefined ? item.is_beneficiado : item.isBeneficiado
+        }))
+      };
+    } catch (e) {
+      console.error("Error in getOrderById:", e);
+      return null;
+    }
+  },
+
   saveOrders: async (orders: Order[]) => {
     if (!isConfigured || !supabase) return;
 
     const client = supabase;
     try {
-      const user = await storage.getCurrentUser();
-      if (!user) throw new Error("Usuário não autenticado.");
-
       for (const order of orders) {
         const orderId = normalizeId(order.id);
         const isQuote = order.type === 'Orçamento';
         const headerTable = isQuote ? 'quotes' : 'orders';
         const itemsTable = isQuote ? 'quote_items' : 'order_items';
-        
-        // Fetch before data for audit
-        const { data: beforeData } = await client.from(headerTable).select(`*, items:${itemsTable}(*)`).eq('id', orderId).maybeSingle();
         
         const sellerId = order.sellerId || null;
         const sellerName = order.sellerName || '';
@@ -408,22 +440,23 @@ export const storage = {
           payment_method: order.paymentMethod,
           shipping_value: order.shippingValue,
           delivery_date: order.deliveryDate,
+          origin_quote_id: order.origin_quote_id,
           created_at: order.createdAt || new Date().toISOString()
         };
 
         const headerResult: any = await withTimeout(() => 
           client.from(headerTable).upsert(headerPayload).select().single(), 
-          20000, { retry: true }
+          15000, { retry: true }
         );
         
         if (headerResult?.error) throw new Error(`Erro no cabeçalho: ${headerResult.error.message}`);
         
         const savedHeader = headerResult.data;
-        if (!savedHeader?.id) throw new Error("Erro crítico: ID do documento não foi retornado pelo banco.");
+        if (!savedHeader?.id) throw new Error("Erro crítico: ID não retornado.");
 
         const fkField = isQuote ? 'quote_id' : 'order_id';
 
-        // Remove itens antigos usando o ID retornado e campo correto
+        // 1. Deletar itens antigos e 2. Inserir novos
         await client.from(itemsTable).delete().eq(fkField, savedHeader.id);
 
         if (order.items && order.items.length > 0) {
@@ -443,14 +476,12 @@ export const storage = {
             is_beneficiado: item.isBeneficiado
           }));
 
-          const itemsResult: any = await withTimeout(() => client.from(itemsTable).insert(itemsPayload), 20000, { retry: true });
+          const itemsResult: any = await withTimeout(() => client.from(itemsTable).insert(itemsPayload), 15000, { retry: true });
           if (itemsResult?.error) throw new Error(`Erro nos itens: ${itemsResult.error.message}`);
         }
-
-        await storage.logAction(beforeData ? 'UPDATE' : 'INSERT', headerTable, savedHeader.id, beforeData, order);
       }
     } catch (err) {
-      console.error("Unexpected error in saveOrders:", err);
+      console.error("Error in saveOrders:", err);
       throw err;
     }
   },

@@ -62,6 +62,7 @@ export interface Order {
   paymentMethod?: string;
   shippingValue?: number;
   deliveryDate?: string;
+  origin_quote_id?: string;
   createdAt: string;
 }
 
