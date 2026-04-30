@@ -22,7 +22,7 @@ const OrderList: React.FC = () => {
 
   const loadOrders = async () => {
     const ordersData = await storage.getOrders(false);
-    const sorted = ordersData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const sorted = ordersData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     setOrders(sorted);
   };
 
@@ -169,7 +169,7 @@ const OrderList: React.FC = () => {
                     <div className="text-[10px] text-slate-400 font-bold flex items-center gap-1 mt-1 uppercase tracking-widest">
                       <Calendar size={12} /> 
                       <div className="font-bold text-slate-600">
-                        {brasiliaTime.formatDateBR(order.date)}
+                        {brasiliaTime.formatDateTimeBR(order.createdAt)}
                       </div>
                     </div>
                   </td>
