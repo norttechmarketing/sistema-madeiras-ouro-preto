@@ -70,18 +70,7 @@ const OrderList: React.FC = () => {
       const fullQuote = await storage.getOrderById(order.id);
       if (!fullQuote) throw new Error("Orçamento não encontrado.");
 
-      // 2. Verificar se j existe um pedido vinculado a este oramento
-      const allOrders = await storage.getOrders(false);
-      const existingOrder = allOrders.find(o => o.type === 'Pedido' && o.origin_quote_id === order.id);
-
-      if (existingOrder) {
-        alert("Este orçamento já foi convertido anteriormente. Abrindo o pedido existente...");
-        // @ts-ignore
-        window.location.href = `#/orders/${existingOrder.id}`;
-        return;
-      }
-
-      // 3. Validar vendedor
+      // 2. Validar vendedor
       const sellers = await storage.getSellers(true);
       const validSeller = sellers.find(s => s.id === fullQuote.sellerId);
       
@@ -91,7 +80,6 @@ const OrderList: React.FC = () => {
         id: newOrderId,
         type: 'Pedido',
         status: 'Rascunho',
-        origin_quote_id: fullQuote.id,
         sellerId: validSeller ? validSeller.id : null,
         sellerName: validSeller ? validSeller.name : (fullQuote.sellerName || ''),
         createdAt: new Date().toISOString()

@@ -383,7 +383,6 @@ export const storage = {
         paymentMethod: row.payment_method || row.paymentMethod,
         shippingValue: Number(row.shipping_value || row.shippingValue || 0),
         deliveryDate: row.delivery_date || row.deliveryDate,
-        origin_quote_id: row.origin_quote_id,
         createdAt: row.created_at || row.createdAt || new Date().toISOString(),
         items: dbItems.map((item: any) => ({
           id: item.id,
@@ -441,7 +440,6 @@ export const storage = {
           payment_method: order.paymentMethod,
           shipping_value: order.shippingValue,
           delivery_date: order.deliveryDate,
-          origin_quote_id: order.origin_quote_id,
           created_at: order.createdAt || new Date().toISOString()
         };
 

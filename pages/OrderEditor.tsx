@@ -51,6 +51,7 @@ const OrderEditor: React.FC = () => {
   const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [vendedores, setVendedores] = useState<Seller[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [activeOrderId, setActiveOrderId] = useState<string>(id && id !== 'new' ? id : uuid());
   const [isExporting, setIsExporting] = useState(false);
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
   const [isClientsModalOpen, setIsClientsModalOpen] = useState(false);
@@ -155,10 +156,17 @@ const OrderEditor: React.FC = () => {
   useEffect(() => {
     const init = async () => {
       const activeSellers = await loadBaseData();
+      
       if (id && id !== 'new') {
+        setActiveOrderId(id);
         await loadOrderData(id);
       } else {
-        if (typeParam === 'Orçamento' || typeParam === 'Pedido') setOrderType(typeParam);
+        // Reset state for new order
+        setOrderType(typeParam === 'Pedido' ? 'Pedido' : 'Orçamento');
+        setOrderItems([]);
+        setSelectedClient(null);
+        setOrderStatus('Rascunho');
+        setCreatedAt(new Date().toISOString());
       }
     };
     init();
@@ -293,17 +301,17 @@ const OrderEditor: React.FC = () => {
     setIsSaving(true);
 
     const orderData: Order = {
-      id: id === 'new' ? uuid() : id!,
+      id: activeOrderId,
       clientId: selectedClient.id,
       clientName: selectedClient.name,
-      sellerId: finalSellerId || undefined, // undefined will be converted to null in storage.ts or handled correctly
+      sellerId: finalSellerId || undefined,
       sellerName: finalSellerName,
       date: new Date().toISOString(),
       status: orderStatus,
       type: typeOverride || orderType,
       items: orderItems,
       subtotal: subtotalItems,
-      totalDiscount: 0, // Not used primarily in this version but kept for type compatibility
+      totalDiscount: 0, 
       globalDiscountType: globalDiscountType,
       globalDiscountValue: Number(globalDiscountValue || 0),
       globalDiscountAmount: globalDiscountAmount,
@@ -317,7 +325,6 @@ const OrderEditor: React.FC = () => {
     };
 
     try {
-      // Salva no banco
       await storage.saveOrders([orderData]);
       
       if (!silent) {
@@ -342,35 +349,26 @@ const OrderEditor: React.FC = () => {
     
     setIsSaving(true);
     try {
-      // 1. Primeiro garante que o orçamento atual está salvo
+      // 1. Garantir que o oramento atual esteja salvo
       const currentQuote = await saveOrder(true, 'Orçamento');
       if (!currentQuote) throw new Error("Falha ao salvar orçamento base.");
 
-      // 2. Verificar se já existe pedido vinculado
-      const allOrders = await storage.getOrders(false);
-      const existing = allOrders.find(o => o.type === 'Pedido' && o.origin_quote_id === currentQuote.id);
-      
-      if (existing) {
-        alert("Este orçamento já possui um pedido vinculado.");
-        navigate(`/orders/${existing.id}`);
-        return;
-      }
-
-      // 3. Cria um NOVO ID para o pedido
+      // 2. Criar um novo ID para o pedido
       const newOrderId = storage.uuid();
       const orderData: Order = {
         ...currentQuote,
         id: newOrderId,
         type: 'Pedido',
         status: 'Rascunho',
-        origin_quote_id: currentQuote.id,
         createdAt: new Date().toISOString()
       };
 
       await storage.saveOrders([orderData]);
       
       alert('Orçamento convertido em Pedido com sucesso!');
-      navigate(`/orders/${newOrderId}`);
+      // Atualiza o ID ativo para o novo pedido para evitar duplicaes subsequentes
+      setActiveOrderId(newOrderId);
+      navigate(`/orders/${newOrderId}`, { replace: true });
     } catch (err: any) {
       console.error("Error converting quote:", err);
       alert(`Erro ao converter orçamento: ${err.message}`);
@@ -388,22 +386,9 @@ const OrderEditor: React.FC = () => {
         return;
       }
 
-      // Se for novo ou tiver mudanas (simulado), salva. Mas se j existe e  apenas visualizao, no salva de novo.
-      let currentOrder: any = null;
-      if (id === 'new') {
-        currentOrder = await saveOrder(true);
-      } else {
-        const validSeller = vendedores.find(v => v.id === selectedSellerId);
-        currentOrder = {
-          id: id!,
-          clientName: selectedClient?.name || 'Cliente',
-          items: orderItems,
-          total: total,
-          sellerId: validSeller ? validSeller.id : null,
-          sellerName: validSeller ? validSeller.name : 'Vendedor',
-          type: orderType
-        };
-      }
+      // Se for novo ou tiver mudanas (simulado), salva.
+      const currentOrder = await saveOrder(true);
+      if (!currentOrder) return;
 
       if (!currentOrder) return;
 
