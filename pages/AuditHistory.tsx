@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { AuditLog } from '../types';
+import { storage, brasiliaTime } from '../services/storage';
 import { Clock, Search, Filter, Eye, X, Calendar, Database, User as UserIcon } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
 import Card from '../components/ui/Card';
@@ -56,10 +57,10 @@ const AuditHistory: React.FC = () => {
     }, [filters]);
 
     const formatDate = (iso: string) => {
-        return new Intl.DateTimeFormat('pt-BR', {
+        return brasiliaTime.format(iso, {
             dateStyle: 'medium',
             timeStyle: 'short'
-        }).format(new Date(iso));
+        });
     };
 
     const getActionBadge = (action: string) => {

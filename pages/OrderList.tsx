@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { storage } from '../services/storage';
+import { storage, brasiliaTime } from '../services/storage';
 import { Order } from '../types';
 import { Search, Plus, Eye, Calendar, User as UserIcon, Trash2, AlertTriangle, X, CheckCircle, FileText } from 'lucide-react';
 import { generateOrderPDF } from '../services/pdfGenerator';
@@ -66,30 +66,23 @@ const OrderList: React.FC = () => {
     if (!window.confirm("Deseja converter este orçamento em pedido?")) return;
     setIsLoadingAction(true);
     try {
-      // 1. Carregar oramento completo
-      const fullQuote = await storage.getOrderById(order.id);
-      if (!fullQuote) throw new Error("Orçamento não encontrado.");
+      // 1. Converter usando o mesmo ID
+      const updatedOrder = await storage.convertQuoteToOrder(order.id);
+      if (!updatedOrder) throw new Error("Erro ao converter orçamento.");
+      
+      // 2. Carregar novamente para garantir dados completos antes de gerar PDF
+      const fullOrder = await storage.getOrderById(order.id);
+      if (!fullOrder) throw new Error("Não foi possível carregar os dados do pedido convertido.");
 
-      // 2. Validar vendedor
-      const sellers = await storage.getSellers(true);
-      const validSeller = sellers.find(s => s.id === fullQuote.sellerId);
-      
-      const newOrderId = storage.uuid();
-      const updatedOrder: Order = { 
-        ...fullQuote, 
-        id: newOrderId,
-        type: 'Pedido',
-        status: 'Rascunho',
-        sellerId: validSeller ? validSeller.id : null,
-        sellerName: validSeller ? validSeller.name : (fullQuote.sellerName || ''),
-        createdAt: new Date().toISOString()
-      };
-      
-      await storage.saveOrders([updatedOrder]);
       await loadOrders();
       alert('Orçamento convertido com sucesso!');
-      // @ts-ignore
-      window.location.href = `#/orders/${newOrderId}`;
+      
+      // 3. Abrir PDF automaticamente
+      const client = (await storage.getClients()).find(c => c.id === fullOrder.clientId);
+      await generateOrderPDF(fullOrder, true, client);
+
+      // Opcional: Redirecionar para o editor do novo pedido
+      // window.location.href = `#/orders/${order.id}`;
     } catch (error: any) {
       console.error("Conversion failed:", error);
       alert(`Erro ao converter orçamento: ${error.message}`);
@@ -176,8 +169,8 @@ const OrderList: React.FC = () => {
                     <div className="text-[10px] text-slate-400 font-bold flex items-center gap-1 mt-1 uppercase tracking-widest">
                       <Calendar size={12} /> 
                       <div className="flex flex-col">
-                        <span>{new Date(order.date).toLocaleDateString()}</span>
-                        <span className="text-[9px] text-slate-400 lowercase">{new Date(order.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span>{brasiliaTime.formatDate(order.date)}</span>
+                        <span className="text-[9px] text-slate-400 lowercase">{brasiliaTime.formatTime(order.date)}</span>
                       </div>
                     </div>
                   </td>

@@ -52,6 +52,34 @@ const toIso = (v: any) => {
   return new Date().toISOString();
 };
 
+export const brasiliaTime = {
+  now: () => new Date(),
+  format: (date: string | Date | undefined, options: Intl.DateTimeFormatOptions = { dateStyle: 'short', timeStyle: 'short' }) => {
+    if (!date) return '';
+    const d = typeof date === 'string' ? new Date(date) : date;
+    return new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      ...options
+    }).format(d);
+  },
+  formatDate: (date: string | Date | undefined) => {
+    if (!date) return '';
+    const d = typeof date === 'string' ? new Date(date) : date;
+    return new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      dateStyle: 'short'
+    }).format(d);
+  },
+  formatTime: (date: string | Date | undefined) => {
+    if (!date) return '';
+    const d = typeof date === 'string' ? new Date(date) : date;
+    return new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      timeStyle: 'short'
+    }).format(d);
+  }
+};
+
 const generateId = () => normalizeId();
 
 let cachedUser: User | null = null;
@@ -669,6 +697,34 @@ export const storage = {
       if (error) console.warn("Audit Log Error:", error);
     } catch (e) {
       console.warn("Audit Log Unexpected Error:", e);
+    }
+  },
+
+  convertQuoteToOrder: async (quoteId: string): Promise<Order | null> => {
+    if (!isConfigured || !supabase) return null;
+    try {
+      // 1. Carregar orçamento completo com itens
+      const quote = await storage.getOrderById(quoteId);
+      if (!quote || quote.type !== 'Orçamento') throw new Error("Orçamento não encontrado.");
+
+      // 2. Preparar dados do pedido (mantendo o MESMO ID)
+      const orderData: Order = {
+        ...quote,
+        type: 'Pedido',
+        status: 'Rascunho'
+      };
+
+      // 3. Remover das tabelas de orçamento
+      await supabase.from('quote_items').delete().eq('quote_id', quoteId);
+      await supabase.from('quotes').delete().eq('id', quoteId);
+
+      // 4. Salvar como pedido (isso irá inserir nas tabelas 'orders' e 'order_items')
+      await storage.saveOrders([orderData]);
+
+      return orderData;
+    } catch (err) {
+      console.error("Error in convertQuoteToOrder:", err);
+      throw err;
     }
   }
 };

@@ -3,6 +3,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Order, OrderItem, Client } from '../types';
 import { COMPANY_INFO } from '../constants';
+import { brasiliaTime } from './storage';
 
 
 
@@ -131,7 +132,7 @@ export const generateOrderPDF = async (order: Order, openPrint = false, client?:
     // Date and Seller (Just below header)
     doc.setTextColor(grayColor);
     doc.setFontSize(9);
-    const dateStr = `Data: ${new Date(order.date).toLocaleDateString()}`;
+    const dateStr = `Data: ${brasiliaTime.formatDate(order.date)}`;
     doc.text(dateStr, pageWidth - 14, 52, { align: 'right' });
 
     if (order.sellerName || 'Madeiras Ouro Preto') {
@@ -181,7 +182,8 @@ export const generateOrderPDF = async (order: Order, openPrint = false, client?:
       doc.setFont('helvetica', 'bold');
       doc.text("Data de Entrega:", 14, 96);
       doc.setFont('helvetica', 'normal');
-      doc.text(new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('pt-BR'), 42, 96);
+      const deliveryDate = new Date(order.deliveryDate + 'T12:00:00');
+      doc.text(brasiliaTime.formatDate(deliveryDate), 42, 96);
     }
 
     // Re-adjust startY for the table
@@ -278,7 +280,7 @@ export const generateOrderPDF = async (order: Order, openPrint = false, client?:
 
     doc.setFontSize(7);
     doc.setTextColor(150, 150, 150);
-    doc.text(`Documento gerado em: ${new Date().toLocaleString('pt-BR')}  |  CNPJ: 08.620.035/0001-35`, 14, footerY);
+    doc.text(`Documento gerado em: ${brasiliaTime.format(new Date())}  |  CNPJ: 08.620.035/0001-35`, 14, footerY);
     doc.text("Madeiras Ouro Preto - Tudo em madeiras brutas e beneficiadas.", pageWidth - 14, footerY, { align: 'right' });
 
     const fileName = `OuroPreto_${order.type?.toUpperCase() || 'DOC'}_${order.id?.slice(-6).toUpperCase() || '000000'}.pdf`;

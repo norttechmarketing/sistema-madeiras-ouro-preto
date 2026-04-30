@@ -349,26 +349,15 @@ const OrderEditor: React.FC = () => {
     
     setIsSaving(true);
     try {
-      // 1. Garantir que o oramento atual esteja salvo
-      const currentQuote = await saveOrder(true, 'Orçamento');
-      if (!currentQuote) throw new Error("Falha ao salvar orçamento base.");
+      // 1. Converter o orçamento atual em pedido (mesmo ID, move de tabela)
+      const convertedOrder = await storage.convertQuoteToOrder(activeOrderId);
+      if (!convertedOrder) throw new Error("Falha ao converter orçamento.");
 
-      // 2. Criar um novo ID para o pedido
-      const newOrderId = storage.uuid();
-      const orderData: Order = {
-        ...currentQuote,
-        id: newOrderId,
-        type: 'Pedido',
-        status: 'Rascunho',
-        createdAt: new Date().toISOString()
-      };
-
-      await storage.saveOrders([orderData]);
-      
       alert('Orçamento convertido em Pedido com sucesso!');
-      // Atualiza o ID ativo para o novo pedido para evitar duplicaes subsequentes
-      setActiveOrderId(newOrderId);
-      navigate(`/orders/${newOrderId}`, { replace: true });
+      
+      // 2. Atualizar estado local e navegar (se necessário, embora o ID seja o mesmo)
+      setOrderType('Pedido');
+      navigate(`/orders/${activeOrderId}`, { replace: true });
     } catch (err: any) {
       console.error("Error converting quote:", err);
       alert(`Erro ao converter orçamento: ${err.message}`);
