@@ -111,12 +111,9 @@ const OrderEditor: React.FC = () => {
       if (clients.length === 0) promises.push(storage.getClients().then(setClients));
       if (products.length === 0) promises.push(storage.getProducts().then(setProducts));
       
-      // Sempre recarrega vendedores se estiver vazio para garantir que apaream no select
-      let currentSellers = vendedores;
-      if (vendedores.length === 0) {
-        currentSellers = await storage.getSellers(true);
-        setVendedores(currentSellers);
-      }
+      // Sempre recarrega vendedores para garantir que o select esteja populado
+      const currentSellers = await storage.getSellers(true);
+      setVendedores(currentSellers);
       
       await Promise.all(promises);
       return currentSellers;
@@ -345,9 +342,13 @@ const OrderEditor: React.FC = () => {
     
     setIsSaving(true);
     try {
-      // Verificar se j existe pedido vinculado
+      // 1. Primeiro garante que o orçamento atual está salvo
+      const currentQuote = await saveOrder(true, 'Orçamento');
+      if (!currentQuote) throw new Error("Falha ao salvar orçamento base.");
+
+      // 2. Verificar se já existe pedido vinculado
       const allOrders = await storage.getOrders(false);
-      const existing = allOrders.find(o => o.type === 'Pedido' && o.origin_quote_id === id);
+      const existing = allOrders.find(o => o.type === 'Pedido' && o.origin_quote_id === currentQuote.id);
       
       if (existing) {
         alert("Este orçamento já possui um pedido vinculado.");
@@ -355,19 +356,24 @@ const OrderEditor: React.FC = () => {
         return;
       }
 
-      const saved = await saveOrder(true, 'Pedido');
-      if (saved) {
-        // Vincula o oramento original
-        saved.origin_quote_id = id === 'new' ? undefined : id;
-        await storage.saveOrders([{ ...saved, type: 'Pedido' }]);
-        
-        setOrderType('Pedido');
-        alert('Orçamento convertido em Pedido com sucesso!');
-        navigate(`/orders/${saved.id}`);
-      }
-    } catch (err) {
+      // 3. Cria um NOVO ID para o pedido
+      const newOrderId = storage.uuid();
+      const orderData: Order = {
+        ...currentQuote,
+        id: newOrderId,
+        type: 'Pedido',
+        status: 'Rascunho',
+        origin_quote_id: currentQuote.id,
+        createdAt: new Date().toISOString()
+      };
+
+      await storage.saveOrders([orderData]);
+      
+      alert('Orçamento convertido em Pedido com sucesso!');
+      navigate(`/orders/${newOrderId}`);
+    } catch (err: any) {
       console.error("Error converting quote:", err);
-      alert("Erro ao converter orçamento.");
+      alert(`Erro ao converter orçamento: ${err.message}`);
     } finally {
       setIsSaving(false);
     }
@@ -441,37 +447,10 @@ const OrderEditor: React.FC = () => {
         return;
       }
 
-      // Se for novo, salva antes. Se j existe, usa o state atual (que j deve estar sincronizado ou ser o que o usurio quer ver)
-      let currentOrder: any = null;
-      if (id === 'new') {
-        currentOrder = await saveOrder(true);
-      } else {
-        const validSeller = vendedores.find(v => v.id === selectedSellerId);
-        currentOrder = {
-          id: id!,
-          clientId: selectedClient?.id || '',
-          clientName: selectedClient?.name || 'Cliente',
-          sellerId: validSeller ? validSeller.id : null,
-          sellerName: validSeller ? validSeller.name : 'Vendedor',
-          date: new Date().toISOString(),
-          status: orderStatus,
-          type: orderType,
-          items: orderItems,
-          subtotal: subtotalItems,
-          shippingValue: Number(shippingValue || 0),
-          deliveryDate: deliveryDate || null,
-          total: total,
-          paymentMethod: paymentMethod === 'Outros' ? otherPaymentMethod : paymentMethod,
-          customerNotes: customerNotes,
-          globalDiscountAmount: Number(globalDiscountAmount || 0),
-          globalDiscountType: globalDiscountType,
-          globalDiscountValue: Number(globalDiscountValue || 0),
-          createdAt: createdAt || new Date().toISOString()
-        };
-      }
-
+      // SEMPRE salva antes de exportar para garantir sincronia com o banco e ID válido
+      const currentOrder = await saveOrder(true);
       if (!currentOrder) {
-        throw new Error("Não foi possível preparar os dados para o PDF.");
+        throw new Error("Não foi possível salvar o documento antes de exportar.");
       }
 
       await generateOrderPDF(currentOrder, true, selectedClient || undefined);

@@ -57,6 +57,7 @@ const generateId = () => normalizeId();
 let cachedUser: User | null = null;
 
 export const storage = {
+  uuid,
   // --- AUTH / USER ---
   getCurrentUser: async (): Promise<User | null> => {
     if (!isConfigured || !supabase) return null;
@@ -235,7 +236,7 @@ export const storage = {
         price: p.price,
         price_bruto: p.price_bruto,
         price_benef: p.price_benef,
-        cost: p.cost,
+        cost: p.cost || 0,
         unit: p.unit,
         created_at: new Date().toISOString()
       }));
@@ -435,8 +436,8 @@ export const storage = {
           discount_value: order.globalDiscountValue,
           discount_amount: order.globalDiscountAmount,
           total: order.total,
-          internal_notes: order.internalNotes,
-          ...(headerTable === 'orders' ? { customer_notes: order.customerNotes } : {}),
+          internal_notes: order.internalNotes || '',
+          customer_notes: order.customerNotes || '',
           payment_method: order.paymentMethod,
           shipping_value: order.shippingValue,
           delivery_date: order.deliveryDate,
