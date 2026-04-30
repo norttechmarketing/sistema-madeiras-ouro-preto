@@ -168,9 +168,8 @@ const OrderList: React.FC = () => {
                     <div className="font-bold text-sm text-slate-900 tracking-tight">#{order.id.slice(-6).toUpperCase()}</div>
                     <div className="text-[10px] text-slate-400 font-bold flex items-center gap-1 mt-1 uppercase tracking-widest">
                       <Calendar size={12} /> 
-                      <div className="flex flex-col">
-                        <span>{brasiliaTime.formatDate(order.date)}</span>
-                        <span className="text-[9px] text-slate-400 lowercase">{brasiliaTime.formatTime(order.date)}</span>
+                      <div className="font-bold text-slate-600">
+                        {brasiliaTime.formatDateBR(order.date)}
                       </div>
                     </div>
                   </td>
