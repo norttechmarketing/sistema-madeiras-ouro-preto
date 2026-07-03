@@ -8,14 +8,14 @@ import Card from '../components/ui/Card';
 import PrimaryButton from '../components/ui/PrimaryButton';
 
 const Sellers: React.FC = () => {
-    const [sellers, setSellers] = useState<Seller[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const [sellers, setSellers] = useState<Seller[]>(storage.getCachedSellers() || []);
+    const [isLoading, setIsLoading] = useState(!storage.getCachedSellers());
     const [isSaving, setIsSaving] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingSeller, setEditingSeller] = useState<Partial<Seller> | null>(null);
 
     const loadSellers = async () => {
-        setIsLoading(true);
+        if (sellers.length === 0) setIsLoading(true);
         const data = await storage.getSellers();
         setSellers(data);
         setIsLoading(false);
@@ -131,7 +131,7 @@ const Sellers: React.FC = () => {
 
             {isModalOpen && (
                 <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-6 animate-in fade-in duration-200">
-                    <Card className="w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-300 !p-0 overflow-hidden">
+                    <Card className="w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl animate-in zoom-in-95 duration-300 !p-0">
                         <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                             <h3 className="text-xl font-bold text-slate-900">{editingSeller?.id ? 'Editar Vendedor' : 'Novo Vendedor'}</h3>
                             <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-900 transition-colors">

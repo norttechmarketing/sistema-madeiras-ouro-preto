@@ -8,7 +8,7 @@ import Card from '../components/ui/Card';
 import PrimaryButton from '../components/ui/PrimaryButton';
 
 const Products: React.FC = () => {
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>(storage.getCachedProducts() || []);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todas');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -56,13 +56,13 @@ const Products: React.FC = () => {
       // Garantir que price exista para compatibilidade
       (payload as any).price = payload.price_bruto;
 
-      const productToSave = editingProduct 
-        ? ({ ...editingProduct, ...payload } as Product) 
+      const productToSave = editingProduct
+        ? ({ ...editingProduct, ...payload } as Product)
         : ({ ...(payload as Product), id: crypto.randomUUID() } as Product);
 
       // Desempenho: Salvar apenas o produto alterado/novo, não o catálogo inteiro
-      await storage.saveProducts([productToSave], editingProduct || undefined);
-      
+      await storage.saveProducts([productToSave]);
+
       // Atualiza estado local e recarrega para garantir sincronia
       await fetchProducts();
 
@@ -220,8 +220,8 @@ const Products: React.FC = () => {
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <Card className="w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 !p-0">
-            <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl animate-in zoom-in-95 duration-200 !p-0">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <div>
                 <h3 className="text-xl font-bold text-slate-900 tracking-tight">{editingProduct ? 'Editar Produto:' : 'Novo Produto:'}</h3>
                 {!editingProduct && <p className="text-xs text-slate-500 font-medium uppercase tracking-widest mt-1">Preencha as informações do produto.</p>}
