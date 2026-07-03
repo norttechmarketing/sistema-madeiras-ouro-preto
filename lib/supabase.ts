@@ -1,0 +1,288 @@
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+
+/**
+ * Utilitário global para gerenciar timeouts em Promises do Supabase
+ */
+/**
+ * Utilitário global para gerenciar timeouts em Promises do Supabase
+ */
+export async function withTimeout<T>(
+  action: Promise<T> | (() => Promise<T>) | any,
+  ms: number = 20000,
+  options: { retry?: boolean; silent?: boolean } = {}
+): Promise<T | null> {
+
+  const { retry = false, silent = false } = options;
+
+  const run = async (timeoutMs: number): Promise<T> => {
+    let timeoutId: any;
+    // Se for uma função, executa para obter a promise (importante para retries frescos)
+    const promise = typeof action === 'function' ? action() : action;
+
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error(`Timeout after ${timeoutMs}ms`));
+      }, timeoutMs);
+    });
+
+    try {
+      return await Promise.race([promise, timeoutPromise]) as T;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
+
+  try {
+    return await run(ms);
+  } catch (error: any) {
+    const isTimeout = error.message?.includes('Timeout');
+
+    if (isTimeout && retry) {
+      console.warn(`Timeout atingido (${ms}ms). Tentando novamente com 30000ms...`);
+      try {
+        return await run(30000);
+      } catch (retryError: any) {
+        if (silent) {
+          console.warn("Retry falhou (timeout), retornando null (silent mode).");
+          return null;
+        }
+        throw retryError;
+      }
+    }
+
+    if (isTimeout && silent) {
+      console.warn(`Timeout atingido, retornando null (silent mode).`);
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+
+// 1. Environment Variables (Safe Access)
+const getEnv = (key: string) => {
+  try {
+    // @ts-ignore
+    return import.meta.env?.[key];
+  } catch {
+    return undefined;
+  }
+};
+
+const ENV_URL = getEnv('VITE_SUPABASE_URL');
+const ENV_KEY = getEnv('VITE_SUPABASE_ANON_KEY');
+
+// 2. Local Storage (Fallback for Preview/Runtime config)
+const getLocal = (key: string) => {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(key);
+};
+
+const LOCAL_URL = getLocal('SUPABASE_URL');
+const LOCAL_KEY = getLocal('SUPABASE_ANON_KEY');
+
+// 3. Hardcoded Defaults (As requested for stability)
+const DEFAULT_URL = "https://dsjqmccdejlvnqpaflff.supabase.co";
+const DEFAULT_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzanFtY2NkZWpsdm5xcGFmbGZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzMjgyNDEsImV4cCI6MjA4NjkwNDI0MX0.AqO_2LWqrohPvgAH2qniO0oWJ59u5HqRppH-eW1qtFA";
+
+// Priority: ENV > LOCAL STORAGE > DEFAULT
+const supabaseUrl = ENV_URL || LOCAL_URL || DEFAULT_URL;
+const supabaseAnonKey = ENV_KEY || LOCAL_KEY || DEFAULT_KEY;
+
+export const isConfigured =
+  !!supabaseUrl &&
+  !!supabaseAnonKey &&
+  supabaseUrl.startsWith('http');
+
+export const setSupabaseLocalConfig = (url: string, key: string) => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('SUPABASE_URL', url);
+    localStorage.setItem('SUPABASE_ANON_KEY', key);
+  }
+};
+
+export const clearSupabaseLocalConfig = () => {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('SUPABASE_URL');
+    localStorage.removeItem('SUPABASE_ANON_KEY');
+  }
+};
+
+export const getSupabaseConfig = () => ({
+  url: supabaseUrl || null,
+  hasKey: !!supabaseAnonKey,
+  isConfigured,
+  source: ENV_URL
+    ? 'env'
+    : LOCAL_URL
+      ? 'localStorage'
+      : 'default'
+});
+
+// Configuração robusta do cliente para evitar problemas de persistência
+export const supabase: SupabaseClient | null = isConfigured
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storage: typeof window !== 'undefined' ? window.localStorage : undefined
+    }
+  })
+  : null;
+
+// Função para validar conexão básica (Ping)
+export const checkSupabaseHealth = async () => {
+  if (!isConfigured || !supabaseUrl || !supabaseAnonKey) {
+    return { ok: false, message: "Configuração ausente." };
+  }
+  try {
+    const res = await fetch(`${supabaseUrl}/auth/v1/health`, {
+      method: 'GET',
+      headers: { 'apikey': supabaseAnonKey }
+    });
+    return { ok: res.ok, message: res.ok ? "Online" : `Status: ${res.status}` };
+  } catch (error: any) {
+    return { ok: false, message: error.message || "Erro de conexão" };
+  }
+};
+
+// Função para limpar tokens inválidos e evitar loop de login
+export const checkSessionHealth = async () => {
+  if (!supabase) return;
+
+  // Verifica se existe algum token salvo antes de validar
+  const hasToken = Object.keys(localStorage).some(k => k.includes('auth-token') || k.includes('sb-'));
+
+  if (!hasToken) return; // Se não tem token, não precisa validar sessão (é guest)
+
+  const sessionResult: any = await withTimeout(supabase.auth.getSession(), 15000).catch(() => null);
+
+  // Se houver erro ou sessão nula (mas tinha token), limpa tudo
+  if (!sessionResult || sessionResult.error || !sessionResult.data?.session) {
+    console.warn("Token de sessão inválido ou expirado detectado. Limpando armazenamento...");
+
+    const tokenKey = Object.keys(localStorage).find(k => k.includes('auth-token') || k.includes('sb-'));
+    if (tokenKey) {
+      localStorage.removeItem(tokenKey);
+    }
+
+    // Recarrega para limpar estado da memória do SDK
+    window.location.reload();
+  }
+};
+
+// Limpa credenciais locais e desloga o usuário redirecionando para login com flag de sessão expirada
+export const handleExpiredSession = async () => {
+  if (supabase) {
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.warn("Erro ao fazer signOut:", e);
+    }
+  }
+
+  // Limpar localStorage
+  localStorage.removeItem('mop_mock_user');
+
+  // Limpar tokens salvos do Supabase no localStorage
+  try {
+    const keys = Object.keys(localStorage);
+    keys.forEach(k => {
+      if (k.includes('auth-token') || k.includes('sb-')) {
+        localStorage.removeItem(k);
+      }
+    });
+  } catch (e) {
+    console.warn("Erro ao limpar chaves do localStorage:", e);
+  }
+
+  // Como usa HashRouter, redirecionar para a rota /login com parâmetro expirada
+  window.location.hash = '#/login?expired=true';
+};
+
+// Valida a sessão antes de operações críticas. Renova se expirada/prestes a expirar.
+// Retorna true se a sessão estiver ativa e válida, false caso contrário.
+export const validateAndRefreshSession = async (): Promise<boolean> => {
+  if (!isConfigured || !supabase) return false;
+
+  try {
+    // Obter sessão atual
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError) {
+      console.error("Erro ao validar sessão:", sessionError);
+      await handleExpiredSession();
+      return false;
+    }
+
+    if (!session) {
+      // Se não há sessão, mas temos um mock user, ignora (bypassa para homologação)
+      const hasMock = localStorage.getItem('mop_mock_user');
+      if (hasMock) return true;
+
+      await handleExpiredSession();
+      return false;
+    }
+
+    // Verificar se expirou ou está prestes (em menos de 10s)
+    const now = Math.floor(Date.now() / 1000);
+    const expiresAt = session.expires_at || 0;
+
+    if (expiresAt - now < 10) {
+      console.log("Token do Supabase expirado ou prestes a expirar. Renovando...");
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+
+      if (refreshError || !refreshData.session) {
+        console.error("Falha ao renovar sessão com refreshSession:", refreshError);
+        await handleExpiredSession();
+        return false;
+      }
+      console.log("Sessão renovada com sucesso.");
+    }
+
+    return true;
+  } catch (err) {
+    console.error("Erro inesperado ao validar sessão:", err);
+    await handleExpiredSession();
+    return false;
+  }
+};
+
+// Intercepta chamadas de banco e trata erros de JWT expired / 401
+export async function safeDbCall<T>(queryFn: () => Promise<T>): Promise<T> {
+  const checkAuthAndRetry = async (err: any): Promise<T> => {
+    const isAuthError = err.status === 401 ||
+      err.code === 'PGRST301' ||
+      err.message?.toLowerCase().includes('jwt expired') ||
+      err.message?.toLowerCase().includes('invalid jwt') ||
+      err.message?.toLowerCase().includes('token expired') ||
+      err.message?.toLowerCase().includes('unauthorized');
+
+    if (isAuthError) {
+      console.warn("Erro de autenticação interceptado. Tentando renovação de token...");
+      const refreshed = await validateAndRefreshSession();
+      if (refreshed) {
+        console.log("Sessão reestabelecida. Retentando operação...");
+        return await queryFn();
+      } else {
+        throw new Error("Sua sessão expirou. Faça login novamente.");
+      }
+    }
+    throw err;
+  };
+
+  try {
+    const result = await queryFn();
+    const anyResult = result as any;
+    if (anyResult && anyResult.error) {
+      return await checkAuthAndRetry(anyResult.error);
+    }
+    return result;
+  } catch (err: any) {
+    return await checkAuthAndRetry(err);
+  }
+}
+
+

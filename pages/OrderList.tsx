@@ -1,0 +1,281 @@
+
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { storage, brasiliaTime } from '../services/storage';
+import { validateAndRefreshSession } from '../lib/supabase';
+import { Order } from '../types';
+import { Search, Plus, Eye, Calendar, User as UserIcon, Trash2, AlertTriangle, X, CheckCircle, FileText } from 'lucide-react';
+import { generateOrderPDF } from '../services/pdfGenerator';
+import PageHeader from '../components/ui/PageHeader';
+import Card from '../components/ui/Card';
+import PrimaryButton from '../components/ui/PrimaryButton';
+
+const OrderList: React.FC = () => {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [typeFilter, setTypeFilter] = useState<'Todos' | 'Pedido' | 'Orçamento'>('Todos');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isLoadingAction, setIsLoadingAction] = useState(false);
+
+  useEffect(() => {
+    loadOrders();
+  }, []);
+
+  const loadOrders = async () => {
+    const ordersData = await storage.getOrders(false);
+    const sorted = ordersData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    setOrders(sorted);
+  };
+
+  const handleDelete = async () => {
+    if (!deletingId) return;
+    setIsLoadingAction(true);
+    try {
+      await storage.deleteOrder(deletingId);
+      setOrders(prev => prev.filter(o => o.id !== deletingId));
+      setDeletingId(null);
+    } catch (error: any) {
+      console.error("Delete failed:", error);
+      alert(`Erro ao excluir: ${error.message}`);
+    } finally {
+      setIsLoadingAction(false);
+    }
+  };
+
+  const handleOpenPDF = async (order: Order) => {
+    // Validar sessão ativa antes de abrir PDF
+    const sessionActive = await validateAndRefreshSession();
+    if (!sessionActive) return;
+
+    setIsLoadingAction(true);
+    try {
+      const fullOrder = await storage.getOrderById(order.id);
+      if (!fullOrder) throw new Error("Não foi possível carregar os dados completos do pedido.");
+
+      if (!fullOrder.items || fullOrder.items.length === 0) {
+        alert("Atenção: Este documento não possui itens cadastrados.");
+        return;
+      }
+
+      const client = (await storage.getClients()).find(c => c.id === fullOrder.clientId);
+      await generateOrderPDF(fullOrder, true, client);
+    } catch (error: any) {
+      console.error("PDF generation failed:", error);
+      alert(`Erro ao gerar PDF: ${error.message}`);
+    } finally {
+      setIsLoadingAction(false);
+    }
+  };
+
+  const handleConvertToOrder = async (order: Order) => {
+    // Validar sessão ativa antes de converter
+    const sessionActive = await validateAndRefreshSession();
+    if (!sessionActive) return;
+
+    if (!window.confirm("Deseja converter este orçamento em pedido?")) return;
+    setIsLoadingAction(true);
+    try {
+      // 1. Converter usando o mesmo ID
+      const updatedOrder = await storage.convertQuoteToOrder(order.id);
+      if (!updatedOrder) throw new Error("Erro ao converter orçamento.");
+
+      // 2. Carregar novamente para garantir dados completos antes de gerar PDF
+      const fullOrder = await storage.getOrderById(order.id);
+      if (!fullOrder) throw new Error("Não foi possível carregar os dados do pedido convertido.");
+
+      await loadOrders();
+      alert('Orçamento convertido com sucesso!');
+
+      // 3. Abrir PDF automaticamente
+      const client = (await storage.getClients()).find(c => c.id === fullOrder.clientId);
+      await generateOrderPDF(fullOrder, true, client);
+
+      // Opcional: Redirecionar para o editor do novo pedido
+      // window.location.href = `#/orders/${order.id}`;
+    } catch (error: any) {
+      console.error("Conversion failed:", error);
+      alert(`Erro ao converter orçamento: ${error.message}`);
+    } finally {
+      setIsLoadingAction(false);
+    }
+  };
+
+  const filteredOrders = orders.filter(o => {
+    const matchesSearch =
+      o.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      o.id.includes(searchTerm) ||
+      (o.sellerName && o.sellerName.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const matchesType = typeFilter === 'Todos' || o.type === typeFilter;
+
+    return matchesSearch && matchesType;
+  });
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <PageHeader title="Histórico de Pedidos / Orçamentos" subtitle="Gestão central de orçamentos e pedidos." />
+        <div className="flex flex-wrap gap-3 w-full sm:w-auto">
+          <Link to="/orders/new?type=Orçamento">
+            <button className="bg-slate-100 text-slate-900 px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-200 transition-all flex items-center gap-2">
+              <Plus size={18} /> Orçamento
+            </button>
+          </Link>
+          <Link to="/orders/new?type=Pedido">
+            <PrimaryButton className="px-5 py-2.5">
+              <CheckCircle size={18} /> Novo Pedido
+            </PrimaryButton>
+          </Link>
+        </div>
+      </div>
+
+      <Card className="!p-0 overflow-hidden">
+        <div className="p-6 border-b border-slate-100 bg-slate-50/50 space-y-4">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="relative group flex-1">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-slate-900 transition-colors" size={20} />
+              <input
+                type="text"
+                placeholder="Buscar por cliente, vendedor ou número..."
+                className="w-full pl-12 pr-4 py-2.5 bg-white border border-[#d9d7d8] rounded-xl focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none font-semibold text-sm transition-all"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Filtro:</span>
+              <select
+                className="bg-white border border-[#d9d7d8] rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] transition-all"
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value as any)}
+              >
+                <option value="Todos">Todos</option>
+                <option value="Pedido">Pedidos</option>
+                <option value="Orçamento">Orçamentos</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              <tr>
+                <th className="px-6 py-4">ID / Data:</th>
+                <th className="px-6 py-4">Cliente:</th>
+                <th className="px-6 py-4">Atendimento:</th>
+                <th className="px-6 py-4 text-center">Tipo:</th>
+                <th className="px-6 py-4">Total:</th>
+                <th className="px-6 py-4 text-right">Ações:</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {filteredOrders.map(order => (
+                <tr key={order.id} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="px-6 py-5">
+                    <div className="font-bold text-sm text-slate-900 tracking-tight">#{order.id.slice(-6).toUpperCase()}</div>
+                    <div className="text-[10px] text-slate-400 font-bold flex items-center gap-1 mt-1 uppercase tracking-widest">
+                      <Calendar size={12} />
+                      <div className="font-bold text-slate-600">
+                        {brasiliaTime.formatDateTimeBR(order.createdAt)}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-5">
+                    <div className="font-bold text-slate-900 text-sm max-w-[200px] truncate">{order.clientName}</div>
+                  </td>
+                  <td className="px-6 py-5">
+                    <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-tight">
+                      <UserIcon size={14} className="text-slate-300" />
+                      {order.sellerName || '—'}
+                    </div>
+                  </td>
+                  <td className="px-6 py-5 text-center">
+                    <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${order.type === 'Pedido' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
+                      {order.type}
+                    </span>
+                  </td>
+                  <td className="px-6 py-5 font-bold text-slate-900 text-sm">
+                    R$ {order.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className="px-6 py-5 text-right font-black uppercase tracking-widest text-[10px]">
+                    <div className="flex justify-end gap-2">
+                      {order.type === 'Orçamento' && (
+                        <button
+                          onClick={() => handleConvertToOrder(order)}
+                          disabled={isLoadingAction}
+                          className="text-blue-500 hover:text-blue-700 p-2 rounded-xl hover:bg-blue-50 transition-all"
+                          title="Converter em Pedido"
+                        >
+                          <CheckCircle size={18} />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleOpenPDF(order)}
+                        disabled={isLoadingAction}
+                        className="text-slate-400 hover:text-slate-900 p-2 rounded-xl hover:bg-slate-100 transition-all"
+                        title="Ver PDF"
+                      >
+                        <FileText size={18} />
+                      </button>
+                      <Link to={`/orders/${order.id}`} className="text-slate-400 hover:text-slate-900 p-2 rounded-xl hover:bg-slate-100 transition-all" title="Editar">
+                        <Eye size={18} />
+                      </Link>
+                      <button
+                        onClick={() => setDeletingId(order.id)}
+                        disabled={isLoadingAction}
+                        className="text-slate-400 hover:text-red-600 p-2 rounded-xl hover:bg-red-50 transition-all"
+                        title="Excluir"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filteredOrders.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="p-20 text-center text-slate-300 font-bold uppercase tracking-widest text-xs">Nenhum pedido / orçamento encontrado.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* Delete Confirmation Modal */}
+      {deletingId && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <Card className="w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 !p-0">
+            <div className="p-8 text-center">
+              <div className="w-16 h-16 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <AlertTriangle size={32} />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 tracking-tight">Excluir Documento?</h3>
+              <p className="text-sm text-slate-500 font-medium mt-2 leading-relaxed">
+                Você está prestes a apagar o registro <span className="text-slate-900 font-black">#{deletingId.slice(-6).toUpperCase()}</span>. Esta ação não poderá ser revertida.
+              </p>
+            </div>
+            <div className="flex border-t border-slate-100">
+              <button
+                onClick={() => setDeletingId(null)}
+                className="flex-1 px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:bg-slate-50 border-r border-slate-100 transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDelete}
+                className="flex-1 px-6 py-5 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 transition-all"
+              >
+                Sim, Excluir
+              </button>
+            </div>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default OrderList;
