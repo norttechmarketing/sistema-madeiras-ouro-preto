@@ -76,6 +76,11 @@ const OrderEditor: React.FC = () => {
   const [isNewClientModalOpen, setIsNewClientModalOpen] = useState(false);
   const [newClientData, setNewClientData] = useState<Partial<Client>>({ type: 'PF', name: '', document: '', phone: '', address: '' });
 
+  // Wood Swap State
+  const [isWoodSwapModalOpen, setIsWoodSwapModalOpen] = useState(false);
+  const [selectedWoodCategory, setSelectedWoodCategory] = useState('');
+  const [woodSwapErrors, setWoodSwapErrors] = useState<string[]>([]);
+
   // New Item State
   const [newItem, setNewItem] = useState<{
     productId: string;
@@ -286,6 +291,76 @@ const OrderEditor: React.FC = () => {
     });
     setProductSearch(fullDescription);
   };
+
+  const handleSwapWood = () => {
+    if (!selectedWoodCategory) return;
+    if (orderItems.length === 0) {
+      alert("Adicione itens ao pedido antes de trocar a madeira.");
+      setIsWoodSwapModalOpen(false);
+      return;
+    }
+
+    const errors: string[] = [];
+    let stateChanged = false;
+
+    const newItems = orderItems.map((item) => {
+      const originalProduct = products.find(p => p.id === item.productId);
+      const originalCat = originalProduct?.category || '';
+      let cleanName = originalProduct ? originalProduct.name.replace(new RegExp(`\\s*${originalCat}\\s*`, 'i'), '').trim() : item.description;
+
+      let matchingProduct = products.find(p =>
+        (p.category || '').toLowerCase() === selectedWoodCategory.toLowerCase() &&
+        p.name.replace(new RegExp(`\\s*${p.category}\\s*`, 'i'), '').trim().toLowerCase() === cleanName.toLowerCase()
+      );
+
+      if (!matchingProduct && originalProduct) {
+        matchingProduct = products.find(p =>
+          (p.category || '').toLowerCase() === selectedWoodCategory.toLowerCase() &&
+          p.name.toLowerCase().includes(cleanName.split(' ')[0].toLowerCase())
+        );
+      }
+
+      if (matchingProduct) {
+        stateChanged = true;
+        const fullDescription = formatProductDisplayName(matchingProduct.name, matchingProduct.category);
+        const newUnitPrice = item.isBeneficiado ? matchingProduct.price_benef : matchingProduct.price_bruto;
+
+        const updated = {
+          ...item,
+          productId: matchingProduct.id,
+          category: matchingProduct.category,
+          description: fullDescription,
+          unitPrice: newUnitPrice
+        };
+
+        let discount = 0;
+        const sub = getItemBaseTotal(updated);
+        if (updated.discountType === 'percentage') {
+          discount = sub * ((updated.discountValue || 0) / 100);
+        } else {
+          discount = (updated.discountValue || 0);
+        }
+        updated.total = Math.max(0, sub - discount);
+
+        return updated;
+      } else {
+        errors.push(item.description);
+        return item;
+      }
+    });
+
+    if (stateChanged) {
+      setOrderItems(newItems);
+    }
+
+    setWoodSwapErrors(errors);
+    if (errors.length === 0) {
+      alert("A madeira de todos os itens foi atualizada com sucesso!");
+      setIsWoodSwapModalOpen(false);
+    }
+  };
+
+  const availableWoodCategories = Array.from(new Set(products.map(p => p.category).filter(Boolean)));
 
   const saveOrder = async (silent = false, typeOverride?: 'Orçamento' | 'Pedido') => {
     if (!selectedClient) {
@@ -667,7 +742,16 @@ const OrderEditor: React.FC = () => {
         <div className="lg:col-span-2 space-y-6">
           <Card className="!p-0 overflow-hidden flex flex-col">
             <div className="p-6 border-b border-slate-100">
-              <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-4">Itens do Pedido:</h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">Itens do Pedido:</h3>
+                <button
+                  type="button"
+                  onClick={() => { setWoodSwapErrors([]); setIsWoodSwapModalOpen(true); }}
+                  className="px-3 py-1.5 bg-[#d9d7d8]/30 hover:bg-[#d9d7d8]/50 text-slate-700 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all shadow-sm"
+                >
+                  Trocar Madeira
+                </button>
+              </div>
               <div className="bg-slate-50/50 p-4 rounded-2xl flex flex-wrap items-end gap-3 border border-slate-100">
                 <div className="flex-1 min-w-[280px] relative group space-y-1.5">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Produto:</label>
@@ -1178,6 +1262,64 @@ const OrderEditor: React.FC = () => {
                 </PrimaryButton>
               </div>
             </form>
+          </Card>
+        </div>
+      )}
+      {/* Wood Swap Modal */}
+      {isWoodSwapModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <Card className="w-full max-w-sm max-h-[85vh] overflow-y-auto shadow-2xl animate-in zoom-in-95 duration-200 !p-0">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <div>
+                <h3 className="text-xl font-bold text-slate-900 tracking-tight">Trocar Madeira</h3>
+                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mt-1">Substituir categoria de todos os itens</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsWoodSwapModalOpen(false)}
+                className="text-slate-400 hover:text-slate-900 p-2 hover:bg-slate-100 rounded-xl transition-all"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nova Categoria de Madeira:</label>
+                <select
+                  className="w-full p-3 border border-[#d9d7d8] rounded-xl text-sm font-medium focus:ring-4 focus:ring-[#02904b]/5 focus:border-[#02904b] outline-none bg-white"
+                  value={selectedWoodCategory}
+                  onChange={(e) => setSelectedWoodCategory(e.target.value)}
+                >
+                  <option value="">Selecione...</option>
+                  {availableWoodCategories.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+
+              {woodSwapErrors.length > 0 && (
+                <div className="p-4 bg-red-50 border border-red-100 rounded-xl space-y-2">
+                  <p className="text-xs font-bold text-red-600">Atenção: Os seguintes itens não foram encontrados na nova categoria e não foram alterados:</p>
+                  <ul className="list-disc pl-4 text-xs text-red-500 font-medium">
+                    {woodSwapErrors.map((err, idx) => (
+                      <li key={idx}>{err}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 p-6 pt-0">
+              <button type="button" onClick={() => setIsWoodSwapModalOpen(false)} className="px-6 py-2.5 text-slate-500 hover:bg-slate-50 rounded-xl font-bold text-sm transition-all uppercase tracking-widest">
+                {woodSwapErrors.length > 0 ? 'Fechar' : 'Cancelar'}
+              </button>
+              {woodSwapErrors.length === 0 && (
+                <PrimaryButton type="button" onClick={handleSwapWood} disabled={!selectedWoodCategory} className="px-8">
+                  Aplicar
+                </PrimaryButton>
+              )}
+            </div>
           </Card>
         </div>
       )}

@@ -11,7 +11,7 @@ import Card from '../components/ui/Card';
 import PrimaryButton from '../components/ui/PrimaryButton';
 
 const OrderList: React.FC = () => {
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<Order[]>(storage.getCachedOrders(false) || []);
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<'Todos' | 'Pedido' | 'Orçamento'>('Todos');
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -158,8 +158,8 @@ const OrderList: React.FC = () => {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
+        <div className="w-full overflow-x-auto">
+          <table className="w-full min-w-[1100px] text-left">
             <thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
               <tr>
                 <th className="px-6 py-4">ID / Data:</th>

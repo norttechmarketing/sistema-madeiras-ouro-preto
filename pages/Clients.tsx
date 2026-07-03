@@ -8,7 +8,7 @@ import Card from '../components/ui/Card';
 import PrimaryButton from '../components/ui/PrimaryButton';
 
 const Clients: React.FC = () => {
-  const [clients, setClients] = useState<Client[]>([]);
+  const [clients, setClients] = useState<Client[]>(storage.getCachedClients() || []);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
@@ -76,7 +76,7 @@ const Clients: React.FC = () => {
         await storage.deleteClient(id);
         setClients(prev => prev.filter(c => c.id !== id));
       } catch (err: any) {
-        alert("Erro ao excluir. Verifique permissões ou se o cliente possui pedidos.");
+        alert(err.message || "Erro ao excluir o cliente.");
       }
     }
   };

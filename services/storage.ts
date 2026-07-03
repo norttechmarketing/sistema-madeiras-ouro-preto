@@ -111,6 +111,10 @@ export const brasiliaTime = {
 const generateId = () => normalizeId();
 
 let cachedUser: User | null = null;
+const memoryCache: Record<string, any> = {
+  lastFetch: {}
+};
+const pendingRequests: Record<string, Promise<any>> = {};
 
 export const storage = {
   uuid,
@@ -167,38 +171,59 @@ export const storage = {
     }
   },
 
+  // --- SYNC CACHE GETTERS ---
+  getCachedClients: () => memoryCache.clients as Client[] | null,
+  getCachedProducts: () => memoryCache.products as Product[] | null,
+  getCachedSellers: (onlyActive = false) => {
+    if (!memoryCache.sellers) return null;
+    return onlyActive ? (memoryCache.sellers as Seller[]).filter(s => s.is_active) : (memoryCache.sellers as Seller[]);
+  },
+  getCachedOrders: (includeItems = false) => {
+    return memoryCache[includeItems ? 'orders_full' : 'orders_header'] as Order[] | null;
+  },
+
 
 
   // --- CLIENTS ---
-  getClients: async (): Promise<Client[]> => {
+  getClients: async (forceFresh = false): Promise<Client[]> => {
     if (!isConfigured || !supabase) return [];
-    await validateAndRefreshSession().catch(() => { });
 
-    try {
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .order('name');
-
-      if (error) {
-        console.error('Error fetching clients:', error);
-        return [];
+    if (!forceFresh && memoryCache.clients) {
+      // Refresh in background if older than 30s
+      if (Date.now() - (memoryCache.lastFetch.clients || 0) > 30000 && !pendingRequests.clients) {
+        pendingRequests.clients = storage.getClients(true).finally(() => { delete pendingRequests.clients; });
       }
-
-      return (data || []).map((row: any) => ({
-        id: row.id,
-        name: row.name,
-        document: row.document,
-        phone: row.phone,
-        email: row.email,
-        address: row.address,
-        type: row.type,
-        internalNotes: row.internal_notes,
-      }));
-    } catch (e) {
-      console.error("Unexpected error in getClients:", e);
-      return [];
+      return memoryCache.clients;
     }
+
+    if (pendingRequests['clients'] !== undefined && !forceFresh) return pendingRequests.clients;
+
+    const fetchPromise = (async () => {
+      try {
+        const { data, error } = await supabase.from('clients').select('*').order('name');
+        if (error) throw error;
+
+        const clients = (data || []).map((row: any) => ({
+          id: row.id,
+          name: row.name,
+          document: row.document,
+          phone: row.phone,
+          email: row.email,
+          address: row.address,
+          type: row.type,
+          internalNotes: row.internal_notes,
+        }));
+        memoryCache.clients = clients;
+        memoryCache.lastFetch.clients = Date.now();
+        return clients;
+      } catch (e) {
+        console.error("Unexpected error in getClients:", e);
+        return memoryCache.clients || [];
+      }
+    })();
+
+    pendingRequests.clients = fetchPromise;
+    try { return await fetchPromise; } finally { delete pendingRequests.clients; }
   },
 
   saveClients: async (clients: Client[]) => {
@@ -251,37 +276,58 @@ export const storage = {
     const { error } = await supabase.from('clients').delete().eq('id', id);
     if (error) {
       console.error('Error deleting client:', error);
+      if (error.code === '23503' || error.message.includes('Foreign key') || error.message.includes('foreign key')) {
+        throw new Error("Este cliente possui pedidos ou orçamentos vinculados e não pode ser excluído.");
+      }
       throw new Error(`Erro ao excluir cliente: ${error.message}`);
     }
+
+    // Invalidar cache
+    memoryCache.clients = null;
+
     await storage.logAction('DELETE', 'clients', id, mappedBefore, null);
   },
 
   // --- PRODUCTS ---
-  getProducts: async (): Promise<Product[]> => {
+  getProducts: async (forceFresh = false): Promise<Product[]> => {
     if (!isConfigured || !supabase) return [];
-    await validateAndRefreshSession().catch(() => { });
-    try {
-      const { data, error } = await supabase.from('products').select('*').order('name');
-      if (error) {
-        console.error('Error fetching products:', error);
-        return [];
+
+    if (!forceFresh && memoryCache.products) {
+      if (Date.now() - (memoryCache.lastFetch.products || 0) > 30000 && !pendingRequests.products) {
+        pendingRequests.products = storage.getProducts(true).finally(() => { delete pendingRequests.products; });
       }
-      // Products table matches types mostly, just ensuring safety
-      return (data || []).map((row: any) => ({
-        id: row.id,
-        code: row.code,
-        name: row.name,
-        category: row.category,
-        price: Number(row.price),
-        price_bruto: Number(row.price_bruto || row.price || 0),
-        price_benef: Number(row.price_benef || row.price || 0),
-        cost: Number(row.cost),
-        unit: row.unit
-      }));
-    } catch (e) {
-      console.error("Unexpected error in getProducts:", e);
-      return [];
+      return memoryCache.products;
     }
+
+    if (pendingRequests['products'] !== undefined && !forceFresh) return pendingRequests.products;
+
+    const fetchPromise = (async () => {
+      try {
+        const { data, error } = await supabase.from('products').select('*').order('name');
+        if (error) throw error;
+
+        const products = (data || []).map((row: any) => ({
+          id: row.id,
+          code: row.code,
+          name: row.name,
+          category: row.category,
+          price: Number(row.price),
+          price_bruto: Number(row.price_bruto || row.price || 0),
+          price_benef: Number(row.price_benef || row.price || 0),
+          cost: Number(row.cost),
+          unit: row.unit
+        }));
+        memoryCache.products = products;
+        memoryCache.lastFetch.products = Date.now();
+        return products;
+      } catch (e) {
+        console.error("Unexpected error in getProducts:", e);
+        return memoryCache.products || [];
+      }
+    })();
+
+    pendingRequests.products = fetchPromise;
+    try { return await fetchPromise; } finally { delete pendingRequests.products; }
   },
 
   saveProducts: async (products: Product[]) => {
@@ -341,73 +387,91 @@ export const storage = {
   },
 
   // --- ORDERS ---
-  getOrders: async (includeItems = true): Promise<Order[]> => {
+  getOrders: async (includeItems = false, forceFresh = false): Promise<Order[]> => {
     if (!isConfigured || !supabase) return [];
-    await validateAndRefreshSession().catch(() => { });
 
-    try {
-      const user = await storage.getCurrentUser();
-      if (!user) return [];
+    // Usa cache apenas se `includeItems` for o mesmo padrão antigo (header only como sugerido)
+    // Se pedirem itens, bypass cache p/ garantir atualização local ou usa cache específico se desejado
+    // Como a listagem pede `getOrders(false)`, vamos focar no cache dessa listagem.
+    const cacheKey = includeItems ? 'orders_full' : 'orders_header';
 
-      const [ordersResult, quotesResult] = await Promise.all([
-        supabase.from('orders').select(includeItems ? '*, items:order_items(*)' : '*').order('date', { ascending: false }),
-        supabase.from('quotes').select(includeItems ? '*, items:quote_items(*)' : '*').order('date', { ascending: false })
-      ]) as any;
-
-      if (ordersResult.error) console.error('Error fetching orders:', ordersResult.error);
-      if (quotesResult.error) console.error('Error fetching quotes:', quotesResult.error);
-
-      const allRows = [...(ordersResult.data || []), ...(quotesResult.data || [])];
-
-      const filteredRows = user.role === 'admin'
-        ? allRows
-        : allRows.filter(r => r.seller_id === user.id);
-
-      return filteredRows.map((row: any) => {
-        const dbItems = row.items || [];
-
-        return {
-          id: row.id,
-          clientId: row.client_id || row.clientId,
-          clientName: row.client_name || row.clientName,
-          sellerId: row.seller_id || row.sellerId,
-          sellerName: row.seller_name || row.sellerName,
-          date: row.date,
-          status: row.status,
-          type: row.type || (row.items ? (row.items[0]?.order_id ? 'Pedido' : 'Orçamento') : 'Pedido'),
-          subtotal: Number(row.subtotal || 0),
-          totalDiscount: Number(row.total_discount || row.totalDiscount || 0),
-          globalDiscountType: row.discount_type || row.globalDiscountType,
-          globalDiscountValue: Number(row.discount_value || row.globalDiscountValue || 0),
-          globalDiscountAmount: Number(row.discount_amount || row.globalDiscountAmount || 0),
-          total: Number(row.total || 0),
-          internalNotes: row.internal_notes || row.internalNotes,
-          customerNotes: row.customer_notes || row.customerNotes,
-          paymentMethod: row.payment_method || row.paymentMethod,
-          shippingValue: Number(row.shipping_value || row.shippingValue || 0),
-          deliveryDate: row.delivery_date || row.deliveryDate,
-          createdAt: row.created_at || row.createdAt || new Date().toISOString(),
-          items: includeItems ? dbItems.map((item: any) => ({
-            id: item.id,
-            productId: item.product_id || item.productId,
-            description: item.description,
-            quantity: Number(item.quantity || 0),
-            unitPrice: Number(item.unit_price || item.unitPrice || 0),
-            unit: item.unit,
-            discountType: item.discount_type || item.discountType,
-            discountValue: Number(item.discount_value || item.discountValue || 0),
-            total: Number(item.total || 0),
-            category: item.category,
-            comprimento: item.comprimento,
-            largura: item.largura,
-            isBeneficiado: item.is_beneficiado !== undefined ? item.is_beneficiado : item.isBeneficiado
-          })) : []
-        };
-      }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    } catch (e) {
-      console.error("Unexpected error in getOrders:", e);
-      return [];
+    if (!forceFresh && memoryCache[cacheKey]) {
+      if (Date.now() - (memoryCache.lastFetch[cacheKey] || 0) > 30000 && !pendingRequests[cacheKey]) {
+        pendingRequests[cacheKey] = storage.getOrders(includeItems, true).finally(() => { delete pendingRequests[cacheKey]; });
+      }
+      return memoryCache[cacheKey];
     }
+
+    if (pendingRequests[cacheKey] !== undefined && !forceFresh) return pendingRequests[cacheKey];
+
+    const fetchPromise = (async () => {
+      try {
+        const user = await storage.getCurrentUser();
+        if (!user) return [];
+
+        const [ordersResult, quotesResult] = await Promise.all([
+          supabase.from('orders').select(includeItems ? '*, items:order_items(*)' : '*').order('date', { ascending: false }),
+          supabase.from('quotes').select(includeItems ? '*, items:quote_items(*)' : '*').order('date', { ascending: false })
+        ]) as any;
+
+        if (ordersResult.error) console.error('Error fetching orders:', ordersResult.error);
+        if (quotesResult.error) console.error('Error fetching quotes:', quotesResult.error);
+
+        const allRows = [...(ordersResult.data || []), ...(quotesResult.data || [])];
+        const filteredRows = user.role === 'admin' ? allRows : allRows.filter(r => r.seller_id === user.id);
+
+        const mapped = filteredRows.map((row: any) => {
+          const dbItems = row.items || [];
+          return {
+            id: row.id,
+            clientId: row.client_id || row.clientId,
+            clientName: row.client_name || row.clientName,
+            sellerId: row.seller_id || row.sellerId,
+            sellerName: row.seller_name || row.sellerName,
+            date: row.date,
+            status: row.status,
+            type: row.type || (row.items && row.items[0]?.order_id ? 'Pedido' : 'Orçamento'),
+            subtotal: Number(row.subtotal || 0),
+            totalDiscount: Number(row.total_discount || row.totalDiscount || 0),
+            globalDiscountType: row.discount_type || row.globalDiscountType,
+            globalDiscountValue: Number(row.discount_value || row.globalDiscountValue || 0),
+            globalDiscountAmount: Number(row.discount_amount || row.globalDiscountAmount || 0),
+            total: Number(row.total || 0),
+            internalNotes: row.internal_notes || row.internalNotes,
+            customerNotes: row.customer_notes || row.customerNotes,
+            paymentMethod: row.payment_method || row.paymentMethod,
+            shippingValue: Number(row.shipping_value || row.shippingValue || 0),
+            deliveryDate: row.delivery_date || row.deliveryDate,
+            createdAt: row.created_at || row.createdAt || new Date().toISOString(),
+            items: includeItems ? dbItems.map((item: any) => ({
+              id: item.id,
+              productId: item.product_id || item.productId,
+              description: item.description,
+              quantity: Number(item.quantity || 0),
+              unitPrice: Number(item.unit_price || item.unitPrice || 0),
+              unit: item.unit,
+              discountType: item.discount_type || item.discountType,
+              discountValue: Number(item.discount_value || item.discountValue || 0),
+              total: Number(item.total || 0),
+              category: item.category,
+              comprimento: item.comprimento,
+              largura: item.largura,
+              isBeneficiado: item.is_beneficiado !== undefined ? item.is_beneficiado : item.isBeneficiado
+            })) : []
+          };
+        }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        memoryCache[cacheKey] = mapped;
+        memoryCache.lastFetch[cacheKey] = Date.now();
+        return mapped;
+      } catch (e) {
+        console.error("Unexpected error in getOrders:", e);
+        return memoryCache[cacheKey] || [];
+      }
+    })();
+
+    pendingRequests[cacheKey] = fetchPromise;
+    try { return await fetchPromise; } finally { delete pendingRequests[cacheKey]; }
   },
 
   getOrderById: async (id: string): Promise<Order | null> => {
@@ -639,38 +703,52 @@ export const storage = {
   },
 
   // --- SELLERS (using dedicated table) ---
-  getSellers: async (onlyActive = false): Promise<Seller[]> => {
+  getSellers: async (onlyActive = false, forceFresh = false): Promise<Seller[]> => {
     if (!isConfigured || !supabase) return [];
-    await validateAndRefreshSession().catch(() => { });
 
-    const client = supabase;
+    if (!forceFresh && memoryCache.sellers) {
+      if (Date.now() - (memoryCache.lastFetch.sellers || 0) > 30000 && !pendingRequests.sellers) {
+        pendingRequests.sellers = storage.getSellers(onlyActive, true).finally(() => { delete pendingRequests.sellers; });
+      }
+      return onlyActive ? memoryCache.sellers.filter((s: Seller) => s.is_active) : memoryCache.sellers;
+    }
+
+    if (pendingRequests['sellers'] !== undefined && !forceFresh) {
+      return (await pendingRequests.sellers).filter((s: Seller) => !onlyActive || s.is_active);
+    }
+
+    const fetchPromise = (async () => {
+      const client = supabase;
+      try {
+        let query = client.from('sellers').select('*');
+        const result: any = await withTimeout(() => query.order('name'), 8000, { silent: true });
+        const { data, error } = result || { data: null, error: null };
+
+        if (error) throw error;
+
+        const sellers = (data || []).map((row: any) => ({
+          id: row.id,
+          name: row.name,
+          whatsapp: row.whatsapp,
+          is_active: row.is_active,
+          created_at: row.created_at
+        }));
+
+        memoryCache.sellers = sellers;
+        memoryCache.lastFetch.sellers = Date.now();
+        return sellers;
+      } catch (e) {
+        console.error("Unexpected error in getSellers:", e);
+        return memoryCache.sellers || [];
+      }
+    })();
+
+    pendingRequests.sellers = fetchPromise;
     try {
-      let query = client
-        .from('sellers')
-        .select('*');
-
-      if (onlyActive) {
-        query = query.eq('is_active', true);
-      }
-
-      // Use timeout (não crítico): sem retry para não segurar a UI no carregamento
-      const result: any = await withTimeout(() => query.order('name'), 8000, { silent: true });
-      const { data, error } = result || { data: null, error: null };
-
-      if (error) {
-        console.warn('Error fetching sellers (using empty list):', error);
-        return [];
-      }
-      return (data || []).map((row: any) => ({
-        id: row.id,
-        name: row.name,
-        whatsapp: row.whatsapp,
-        is_active: row.is_active,
-        created_at: row.created_at
-      }));
-    } catch (e) {
-      console.error("Unexpected error in getSellers:", e);
-      return [];
+      const res = await fetchPromise;
+      return onlyActive ? res.filter((s: Seller) => s.is_active) : res;
+    } finally {
+      delete pendingRequests.sellers;
     }
   },
 
